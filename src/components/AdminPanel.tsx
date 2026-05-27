@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Match, MatchPhase } from '../types';
 import { Settings, Save, RefreshCw, AlertTriangle, Play, CheckCircle } from 'lucide-react';
+import TeamFlag from './TeamFlag';
 
 interface AdminPanelProps {
   matches: Match[];
@@ -127,10 +128,10 @@ export default function AdminPanel({
                   </span>
                   
                   <div className="flex items-center gap-2 mt-1">
-                    <span className="text-2xl">{match.homeTeam.flag}</span>
+                    <TeamFlag team={match.homeTeam} size="md" />
                     <span className="font-bold text-slate-800 text-xs w-20 truncate">{match.homeTeam.name}</span>
                     <span className="text-slate-400 font-mono">vs</span>
-                    <span className="text-2xl">{match.awayTeam.flag}</span>
+                    <TeamFlag team={match.awayTeam} size="md" />
                     <span className="font-bold text-slate-800 text-xs w-23 truncate text-left">{match.awayTeam.name}</span>
                   </div>
                 </div>

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { UserStats, UserProfile, Match, Forecast, League } from '../types';
 import { Trophy, Award, Search, Percent, Medal, BarChart2, Calendar } from 'lucide-react';
 import { calculateScore } from '../utils/scoring';
+import TeamFlag from './TeamFlag';
 
 interface LeaderboardProps {
   stats: UserStats[];
@@ -499,9 +500,15 @@ export default function Leaderboard({
                                   return (
                                     <div key={m.id} className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-slate-50 border border-slate-200/60 p-2.5 rounded-xl text-xs gap-3 hover:border-indigo-150 transition-all">
                                       <div className="flex items-center gap-2 select-none">
-                                        <span className="text-xs font-semibold">{m.homeTeam.flag} {m.homeTeam.name}</span>
+                                        <span className="text-xs font-semibold flex items-center gap-1.5">
+                                          <TeamFlag team={m.homeTeam} size="sm" />
+                                          {m.homeTeam.name}
+                                        </span>
                                         <span className="text-slate-400 font-bold text-[9px] uppercase">vs</span>
-                                        <span className="text-xs font-semibold">{m.awayTeam.flag} {m.awayTeam.name}</span>
+                                        <span className="text-xs font-semibold flex items-center gap-1.5">
+                                          <TeamFlag team={m.awayTeam} size="sm" />
+                                          {m.awayTeam.name}
+                                        </span>
                                       </div>
                                       
                                       <div className="flex items-center gap-2.5 self-stretch sm:self-auto justify-between shrink-0">

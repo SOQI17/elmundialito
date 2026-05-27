@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Match, UserProfile, MatchIncident } from '../types';
 import { Play, Pause, X, Radio, RefreshCw, Trophy, Zap, AlertCircle, ArrowUpRight, Shield, Clock, Eye, ToggleLeft, Send, Sparkles } from 'lucide-react';
+import TeamFlag from './TeamFlag';
 
 interface LiveMatchSimulatorProps {
   match: Match;
@@ -623,7 +624,9 @@ export default function LiveMatchSimulator({
           <div className="grid grid-cols-3 items-center mt-7" id="live-score-grid">
             {/* Home team */}
             <div className="flex flex-col items-center text-center space-y-2">
-              <span className="text-4xl select-none filter drop-shadow-md">{match.homeTeam.flag}</span>
+              <span className="filter drop-shadow-md select-none" role="img" aria-label={match.homeTeam.name}>
+                <TeamFlag team={match.homeTeam} size="lg" />
+              </span>
               <span className="font-extrabold text-sm sm:text-base tracking-tight text-white">{match.homeTeam.name}</span>
               <span className="text-[9px] bg-slate-800/80 border border-slate-750 text-slate-400 px-2 py-0.5 rounded-md uppercase font-bold">LOCAL</span>
             </div>
@@ -659,7 +662,9 @@ export default function LiveMatchSimulator({
 
             {/* Away team */}
             <div className="flex flex-col items-center text-center space-y-2">
-              <span className="text-4xl select-none filter drop-shadow-md">{match.awayTeam.flag}</span>
+              <span className="filter drop-shadow-md select-none" role="img" aria-label={match.awayTeam.name}>
+                <TeamFlag team={match.awayTeam} size="lg" />
+              </span>
               <span className="font-extrabold text-sm sm:text-base tracking-tight text-white">{match.awayTeam.name}</span>
               <span className="text-[9px] bg-slate-800/80 border border-slate-750 text-slate-400 px-2 py-0.5 rounded-md uppercase font-bold">VISITANTE</span>
             </div>

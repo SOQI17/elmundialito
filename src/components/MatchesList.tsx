@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Match, MatchPhase, Forecast, UserProfile } from '../types';
 import { Lock, Unlock, Calendar, Eye, Activity, CheckSquare, Sparkles, Tv } from 'lucide-react';
 import LiveMatchSimulator from './LiveMatchSimulator';
+import TeamFlag from './TeamFlag';
 
 interface MatchesListProps {
   matches: Match[];
@@ -333,8 +334,8 @@ export default function MatchesList({
 
                               {/* Home Team — FLAG + NAME */}
                               <div className="flex flex-col items-center flex-1 text-center gap-1">
-                                <span className="text-5xl leading-none filter drop-shadow-sm select-none" role="img" aria-label={match.homeTeam.name}>
-                                  {match.homeTeam.flag}
+                                <span className="filter drop-shadow-sm select-none" role="img" aria-label={match.homeTeam.name}>
+                                  <TeamFlag team={match.homeTeam} size="xl" />
                                 </span>
                                 <span className="text-xs font-bold text-slate-800 mt-1">{match.homeTeam.name}</span>
                               </div>
@@ -356,8 +357,8 @@ export default function MatchesList({
 
                               {/* Away Team — FLAG + NAME */}
                               <div className="flex flex-col items-center flex-1 text-center gap-1">
-                                <span className="text-5xl leading-none filter drop-shadow-sm select-none" role="img" aria-label={match.awayTeam.name}>
-                                  {match.awayTeam.flag}
+                                <span className="filter drop-shadow-sm select-none" role="img" aria-label={match.awayTeam.name}>
+                                  <TeamFlag team={match.awayTeam} size="xl" />
                                 </span>
                                 <span className="text-xs font-bold text-slate-800 mt-1">{match.awayTeam.name}</span>
                               </div>
