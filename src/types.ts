@@ -50,6 +50,7 @@ export interface UserProfile {
   avatar: string;
   isAdmin?: boolean;
   isOfflineFallback?: boolean;
+  onboarded?: boolean; // false = mostrar onboarding al primer ingreso
 }
 
 export interface UserStats {

@@ -47,11 +47,11 @@ export default function InteractiveSandbox() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-6 border-b border-slate-100">
         <div>
           <span className="px-3 py-1 bg-amber-50 text-amber-700 text-xs font-semibold rounded-full uppercase tracking-wider">
-            Simulador de Reglas
+            Reglamento Oficial de Puntos
           </span>
-          <h2 className="text-2xl font-bold text-slate-900 mt-2 font-sans">Sandbox del Algoritmo de Puntuación</h2>
-          <p className="text-sm text-slate-505 mt-1 text-slate-500">
-            Prueba combinando diferentes resultados reales y pronósticos para ver cómo calcula los puntos el motor de reglas en vivo.
+          <h2 className="text-2xl font-bold text-slate-900 mt-2 font-sans">Reglas y Sistema de Cómputo de Puntos</h2>
+          <p className="text-sm text-slate-500 mt-1">
+            Consulta las pautas oficiales y simula escenarios de resultados frente a tus pronósticos para entender el cálculo automático de puntos.
           </p>
         </div>
         <button
@@ -302,8 +302,8 @@ export default function InteractiveSandbox() {
           </div>
 
           <div className="mt-6 border-t border-slate-800 pt-4 text-[11px] text-slate-500 flex justify-between items-center bg-slate-900 font-mono">
-            <span>MODO SIMULADOR INTERACTIVO v1.0</span>
-            <span>POLÍGONOS DE PRUEBA</span>
+            <span>SISTEMA DE REGLAS DE PUNTUACIÓN</span>
+            <span>CÓMPUTO AUTOMÁTICO</span>
           </div>
         </div>
       </div>
