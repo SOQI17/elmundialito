@@ -17,11 +17,13 @@ import AdminPanel from './components/AdminPanel';
 import AuthScreen from './components/AuthScreen';
 import EditProfileModal from './components/Editprofilemodal';
 import OnboardingScreen from './components/Onboardingscreen';
+import ForceBootstrap from './components/Forcebootstrap';
 
 const ADMIN_EMAIL = 'alexisguerra9577@gmail.com';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'leagues' | 'calendar' | 'leaderboard' | 'sandbox' | 'admin'>('calendar');
+  const [showForceBootstrap, setShowForceBootstrap] = useState(false);
 
   // Auth
   const [authReady, setAuthReady] = useState(false);
@@ -465,6 +467,11 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-800 flex flex-col antialiased">
 
+      {/* Force Bootstrap Modal */}
+      {showForceBootstrap && (
+        <ForceBootstrap onDone={() => { setShowForceBootstrap(false); window.location.reload(); }} />
+      )}
+
       {/* Edit Profile Modal */}
       {showEditProfile && (
         <EditProfileModal
@@ -539,6 +546,14 @@ export default function App() {
                   >
                     <Pencil className="w-3 h-3 text-indigo-200 group-hover:text-white" />
                   </button>
+                  {true && (
+                    <button
+                      onClick={() => setShowForceBootstrap(true)}
+                      className="px-2 py-1 rounded-md bg-amber-500/20 hover:bg-amber-500/40 text-amber-300 text-[10px] font-bold transition-all cursor-pointer border border-amber-500/30"
+                    >
+                      🔧 Cargar DB
+                    </button>
+                  )}
                 </div>
                 <span className="text-xs text-indigo-200 mt-0.5 block">
                   Jugando en: <strong className="text-white underline">

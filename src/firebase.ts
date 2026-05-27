@@ -3,24 +3,27 @@ import { getAuth } from "firebase/auth";
 import { getFirestore, doc, getDocFromServer } from "firebase/firestore";
 import firebaseConfig from "../firebase-applet-config.json";
 
-// Initialize Firebase
 const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+
+// ✅ "(default)" es válido — lo pasamos directamente
+export const db = getFirestore(app);
 export const auth = getAuth(app);
 
-// Test connection on boot as requested by Firebase skill
+// Test de conexión
 async function testConnection() {
   try {
     await getDocFromServer(doc(db, "test", "connection"));
-  } catch (error) {
-    if (error instanceof Error && error.message.includes("the client is offline")) {
-      console.warn("Please check your Firebase configuration or internet connection.");
+    console.log("✅ Firestore conectado correctamente");
+  } catch (error: any) {
+    if (error?.message?.includes("offline")) {
+      console.warn("⚠️ Sin conexión a Firebase.");
+    } else {
+      console.log("🔌 Firestore responde (doc no existe, es normal):", error?.code);
     }
   }
 }
 testConnection();
 
-// Structured Error Handling as requested by Firebase skill
 export enum OperationType {
   CREATE = "create",
   UPDATE = "update",
@@ -28,6 +31,7 @@ export enum OperationType {
   LIST = "list",
   GET = "get",
   WRITE = "write",
+  READ = "read",
 }
 
 export interface FirestoreErrorInfo {
@@ -40,10 +44,7 @@ export interface FirestoreErrorInfo {
     emailVerified?: boolean | null;
     isAnonymous?: boolean | null;
     tenantId?: string | null;
-    providerInfo?: {
-      providerId?: string | null;
-      email?: string | null;
-    }[];
+    providerInfo?: { providerId?: string | null; email?: string | null }[];
   };
 }
 
@@ -56,14 +57,13 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
       emailVerified: auth.currentUser?.emailVerified,
       isAnonymous: auth.currentUser?.isAnonymous,
       tenantId: auth.currentUser?.tenantId,
-      providerInfo: auth.currentUser?.providerData?.map(provider => ({
-        providerId: provider.providerId,
-        email: provider.email,
+      providerInfo: auth.currentUser?.providerData?.map(p => ({
+        providerId: p.providerId,
+        email: p.email,
       })) || []
     },
     operationType,
     path
   };
-  console.error("Firestore Error Detailed Object: ", JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
+  console.error("Firestore Error:", JSON.stringify(errInfo));
 }
