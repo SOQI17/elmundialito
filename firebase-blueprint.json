@@ -1,0 +1,162 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile containing identity information",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "The unique Firebase Auth UID"
+        },
+        "name": {
+          "type": "string",
+          "description": "The display name of the user"
+        },
+        "avatar": {
+          "type": "string",
+          "description": "The avatar emoji representing the user"
+        },
+        "email": {
+          "type": "string",
+          "description": "Verified email of the user"
+        },
+        "isAdmin": {
+          "type": "boolean",
+          "description": "Whether the user is an admin"
+        }
+      },
+      "required": ["id", "name", "avatar", "email"]
+    },
+    "Match": {
+      "title": "Match",
+      "description": "A fixtures match in the real World Cup 2026",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "The match code"
+        },
+        "homeTeam": {
+          "type": "object",
+          "description": "Home team details"
+        },
+        "awayTeam": {
+          "type": "object",
+          "description": "Away team details"
+        },
+        "dateTime": {
+          "type": "string",
+          "description": "ISO timestamp of the match"
+        },
+        "phase": {
+          "type": "string",
+          "description": "State/phase of the match"
+        },
+        "homeScore": {
+          "type": "number",
+          "description": "Actual score of home team"
+        },
+        "awayScore": {
+          "type": "number",
+          "description": "Actual score of away team"
+        },
+        "status": {
+          "type": "string",
+          "description": "Scheduled, live, or finished"
+        }
+      },
+      "required": ["id", "homeTeam", "awayTeam", "dateTime", "phase", "status"]
+    },
+    "Forecast": {
+      "title": "Forecast",
+      "description": "A predictability prediction for a match from a given user",
+      "type": "object",
+      "properties": {
+        "matchId": {
+          "type": "string",
+          "description": "Match reference ID"
+        },
+        "userId": {
+          "type": "string",
+          "description": "User ID reference"
+        },
+        "homeScore": {
+          "type": "number",
+          "description": "Score user predicted for home team"
+        },
+        "awayScore": {
+          "type": "number",
+          "description": "Score user predicted for away team"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "ISO timestamp of last forecast update"
+        }
+      },
+      "required": ["matchId", "userId", "homeScore", "awayScore", "updatedAt"]
+    },
+    "League": {
+      "title": "League",
+      "description": "A group playing betting pool together",
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "description": "League sharing code and identifier"
+        },
+        "name": {
+          "type": "string",
+          "description": "User-facing name of the league"
+        },
+        "creatorId": {
+          "type": "string",
+          "description": "The UID of the user who created it"
+        }
+      },
+      "required": ["code", "name", "creatorId"]
+    },
+    "LeagueMember": {
+      "title": "LeagueMember",
+      "description": "Mapping from a league to a user representing membership",
+      "type": "object",
+      "properties": {
+        "leagueCode": {
+          "type": "string",
+          "description": "The league code reference"
+        },
+        "userId": {
+          "type": "string",
+          "description": "The user ID reference"
+        },
+        "joinedAt": {
+          "type": "string",
+          "description": "ISO Date when they joined the league"
+        }
+      },
+      "required": ["leagueCode", "userId", "joinedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profile mapping containing metadata and preferences"
+    },
+    "/matches/{matchId}": {
+      "schema": "Match",
+      "description": "Live and scheduled games during the World Cup 2026"
+    },
+    "/forecasts/{forecastId}": {
+      "schema": "Forecast",
+      "description": "User forecasts with combined ID '{matchId}_{userId}' key"
+    },
+    "/leagues/{leagueCode}": {
+      "schema": "League",
+      "description": "Friend leagues for betting together"
+    },
+    "/leagues/{leagueCode}/members/{memberId}": {
+      "schema": "LeagueMember",
+      "description": "Collection mapping identifying participating league users"
+    }
+  }
+}

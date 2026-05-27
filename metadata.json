@@ -1,0 +1,6 @@
+{
+  "name": "Polla Mundialista",
+  "description": "Aplicación para polla o pool de apuestas del Mundial de Fútbol entre amigos con sistema de predicciones, calendario interactivo, panel de administración y cálculo de posiciones en tiempo real.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

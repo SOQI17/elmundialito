@@ -1,0 +1,154 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 1. Global Safety Net: Default deny everything
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- REUSABLE SECURITY PRIMITIVES ---
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == "alexisguerra9577@gmail.com" ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true)
+      );
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // --- COLLECTION MATCHES ---
+
+    // 2. User Profiles (Split Strategy to protect private data like email)
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      
+      allow create: if isSignedIn() && 
+                    userId == request.auth.uid && 
+                    incoming().id == userId && 
+                    incoming().name is string && 
+                    incoming().avatar is string && 
+                    incoming().name.size() <= 50 &&
+                    // Restrict self-assigned admin
+                    (!incoming().keys().hasAll(['isAdmin']) || incoming().isAdmin == false);
+                    
+      allow update: if isSignedIn() && (
+                    isAdmin() || 
+                    (userId == request.auth.uid && 
+                     incoming().id == existing().id && 
+                     incoming().name is string && 
+                     incoming().avatar is string &&
+                     incoming().name.size() <= 50 &&
+                     incoming().isAdmin == existing().isAdmin)
+                    );
+    }
+
+    // User Private Split Collection (contains sensitive PII like email)
+    match /users/{userId}/private/info {
+      allow read, write: if isOwner(userId) || isAdmin();
+    }
+
+    // 3. Matches (Admin Only Writes, Signed in Users Read)
+    match /matches/{matchId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // 4. Forecasts (Users can only modify their own forecasts, and only before kick-off)
+    match /forecasts/{forecastId} {
+      allow read: if isSignedIn();
+      
+      allow create: if isSignedIn() && 
+                    isValidId(forecastId) &&
+                    incoming().userId == request.auth.uid && 
+                    forecastId == (incoming().matchId + "_" + request.auth.uid) && 
+                    incoming().homeScore is int && 
+                    incoming().awayScore is int &&
+                    incoming().homeScore >= 0 && incoming().homeScore <= 99 &&
+                    incoming().awayScore >= 0 && incoming().awayScore <= 99 &&
+                    incoming().updatedAt == request.time &&
+                    // Match must exist and be in scheduled status
+                    exists(/databases/$(database)/documents/matches/$(incoming().matchId)) &&
+                    get(/databases/$(database)/documents/matches/$(incoming().matchId)).data.status == "scheduled";
+                    
+      allow update: if isSignedIn() && 
+                    isValidId(forecastId) &&
+                    existing().userId == request.auth.uid && 
+                    incoming().userId == request.auth.uid && 
+                    incoming().matchId == existing().matchId && 
+                    incoming().homeScore is int && 
+                    incoming().awayScore is int &&
+                    incoming().homeScore >= 0 && incoming().homeScore <= 99 &&
+                    incoming().awayScore >= 0 && incoming().awayScore <= 99 &&
+                    incoming().updatedAt == request.time &&
+                    // Match must be in scheduled status
+                    get(/databases/$(database)/documents/matches/$(existing().matchId)).data.status == "scheduled";
+
+      allow delete: if isSignedIn() && 
+                    existing().userId == request.auth.uid &&
+                    get(/databases/$(database)/documents/matches/$(existing().matchId)).data.status == "scheduled";
+    }
+
+    // 5. Leagues (Created by Users, Editable by Admins or Creators)
+    match /leagues/{leagueCode} {
+      allow read: if isSignedIn();
+      
+      allow create: if isSignedIn() && 
+                    isValidId(leagueCode) && 
+                    incoming().code == leagueCode && 
+                    incoming().creatorId == request.auth.uid && 
+                    incoming().name is string && 
+                    incoming().name.size() <= 50;
+                    
+      allow update: if isSignedIn() && (
+                    isAdmin() || 
+                    (existing().creatorId == request.auth.uid && 
+                     incoming().code == existing().code && 
+                     incoming().creatorId == existing().creatorId && 
+                     incoming().name is string && 
+                     incoming().name.size() <= 50)
+                    );
+                    
+      allow delete: if isSignedIn() && (isAdmin() || existing().creatorId == request.auth.uid);
+
+      // Sub-collection for League Members
+      match /members/{memberId} {
+        allow read: if isSignedIn();
+        
+        allow create: if isSignedIn() && 
+                      memberId == request.auth.uid && 
+                      incoming().userId == request.auth.uid && 
+                      incoming().leagueCode == leagueCode && 
+                      incoming().joinedAt == request.time &&
+                      exists(/databases/$(database)/documents/leagues/$(leagueCode));
+                      
+        allow delete: if isSignedIn() && (
+                      memberId == request.auth.uid || 
+                      get(/databases/$(database)/documents/leagues/$(leagueCode)).data.creatorId == request.auth.uid || 
+                      isAdmin()
+                      );
+      }
+    }
+
+  }
+}
