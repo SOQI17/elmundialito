@@ -62,7 +62,9 @@ export default function VoucherScanner({ league, onSubmitVoucher, onClose }: Vou
     if (file) {
       const filenameCleaned = file.name
         .replace(/\b\d{4}-\d{2}-\d{2}\b/g, '') // Quitar fechas YYYY-MM-DD
-        .replace(/\b\d{2}[-.:]\d{2}[-.:]\d{2}\b/g, '') // Quitar horas HH:MM:SS
+        .replace(/\b\d{2}[-.:]\d{2}[-.:]\d{2}\b/g, '') // Quitar horas con segundos HH:MM:SS
+        .replace(/\b\d{2}[-.:]\d{2}\b/g, '') // Quitar horas sin segundos HH:MM
+        .replace(/\(\d+\)/g, '') // Quitar duplicados de archivo de Windows (ej: (15))
         .replace(/\bat\b/gi, ''); // Quitar palabra "at"
       
       // Buscar cualquier número decimal o entero en el nombre limpio
