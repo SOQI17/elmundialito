@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { TEAM_STATS } from '../data/teamStats';
 
 // Map 2026 World Cup 3-letter team ID to 2-letter flag code (lowercase) for flagcdn.com
@@ -143,7 +144,7 @@ export default function TeamFlag({ team, className = '', size = 'md' }: TeamFlag
   return (
     <>
       {flagImage}
-      {isOpen && stats && (
+      {isOpen && stats && typeof document !== 'undefined' && createPortal(
         <div 
           className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-4 animate-fadeIn"
           onClick={(e) => {
@@ -305,7 +306,8 @@ export default function TeamFlag({ team, className = '', size = 'md' }: TeamFlag
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );
