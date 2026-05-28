@@ -115,7 +115,7 @@ export default function Leaderboard({
     if (currentLeague) {
       const activeMemberIds = currentLeague.members || [];
       activeParticipants = activeParticipants.filter(u => 
-        activeMemberIds.includes(u.id) || u.id === currentUser.id
+        activeMemberIds.includes(u.id)
       );
     }
 

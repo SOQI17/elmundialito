@@ -601,7 +601,7 @@ export default function App() {
     let participants = Array.from(map.values());
     if (currentLeague) {
       const memberIds = leaguesMembersMap[currentLeague.code] || [];
-      participants = participants.filter(u => memberIds.includes(u.id) || u.id === currentUser.id);
+      participants = participants.filter(u => memberIds.includes(u.id));
     }
     return participants.map(user => {
       let exact = 0, trend = 0, simple = 0, none = 0, total = 0, pending = 0;
