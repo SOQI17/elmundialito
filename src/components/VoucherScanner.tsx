@@ -57,12 +57,21 @@ export default function VoucherScanner({ league, onSubmitVoucher, onClose }: Vou
     setScanning(false);
     
     // Simulación inteligente de extracción de texto
-    // Si el nombre del archivo contiene números (ej: 15, 10, 20), extraemos el valor como el monto
-    let detectedAmount = league.costPerEntry || 5;
+    // Ignoramos fechas y horas automáticas del nombre del archivo (ej. WhatsApp Image YYYY-MM-DD at HH.MM.SS)
+    let detectedAmount = league.costPerEntry || 9;
     if (file) {
-      const match = file.name.match(/\b(5|10|15|20|25|30|50|100)\b/);
+      const filenameCleaned = file.name
+        .replace(/\b\d{4}-\d{2}-\d{2}\b/g, '') // Quitar fechas YYYY-MM-DD
+        .replace(/\b\d{2}[-.:]\d{2}[-.:]\d{2}\b/g, '') // Quitar horas HH:MM:SS
+        .replace(/\bat\b/gi, ''); // Quitar palabra "at"
+      
+      // Buscar cualquier número decimal o entero en el nombre limpio
+      const match = filenameCleaned.match(/\b\d+(?:\.\d{2})?\b/);
       if (match) {
-        detectedAmount = parseInt(match[0], 10);
+        const val = parseFloat(match[0]);
+        if (val > 0) {
+          detectedAmount = val;
+        }
       }
     }
 
@@ -293,9 +302,12 @@ export default function VoucherScanner({ league, onSubmitVoucher, onClose }: Vou
                 <input
                   type="number"
                   min="1"
-                  value={inputAmount}
+                  value={inputAmount || ''}
                   disabled={accountVerification === 'mismatch'}
-                  onChange={(e) => setInputAmount(Math.max(1, parseFloat(e.target.value)))}
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value);
+                    setInputAmount(isNaN(val) ? 0 : val);
+                  }}
                   className="w-full bg-slate-900 border border-slate-800 focus:border-indigo-500 rounded-xl py-1.5 pl-7 pr-3 text-xs text-white focus:outline-none transition-all font-mono font-bold disabled:opacity-40"
                   required
                 />
