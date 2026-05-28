@@ -422,6 +422,15 @@ export default function App() {
 
   const handleSaveForecast = async (matchId: string, homeScore: number, awayScore: number) => {
     if (!currentUser) return;
+    const match = matches.find(m => m.id === matchId);
+    if (!match) return;
+
+    const isLocked = match.status === 'live' || match.status === 'finished' || new Date().getTime() >= new Date(match.dateTime).getTime();
+    if (isLocked) {
+      alert("Error: El partido ya ha comenzado. No se pueden registrar ni modificar pronósticos.");
+      return;
+    }
+
     const forecastId = `${matchId}_${currentUser.id}`;
     const nowIso = new Date().toISOString();
     const localForecast: Forecast = { matchId, userId: currentUser.id, homeScore: Number(homeScore), awayScore: Number(awayScore), updatedAt: nowIso };

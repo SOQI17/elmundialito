@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Match, MatchPhase, Forecast, UserProfile } from '../types';
 import { Lock, Unlock, Calendar, Eye, Activity, CheckSquare, Sparkles, Tv } from 'lucide-react';
 import LiveMatchSimulator from './LiveMatchSimulator';
@@ -58,21 +58,25 @@ export default function MatchesList({
   const [drafts, setDrafts] = useState<Record<string, { homeScore: number; awayScore: number }>>({});
   const [savingMatchIds, setSavingMatchIds] = useState<Record<string, boolean>>({});
   const [selectedLiveMatch, setSelectedLiveMatch] = useState<Match | null>(null);
+  const [now, setNow] = useState<Date>(new Date());
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setNow(new Date());
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   const isMatchLocked = (match: Match): boolean => {
     if (match.status === 'live' || match.status === 'finished') return true;
     const kickoff = new Date(match.dateTime).getTime();
-    const now = new Date('2026-05-27T13:48:26Z').getTime();
-    return (kickoff - now) < 15 * 60 * 1000;
+    return now.getTime() >= kickoff;
   };
 
   const getLockReason = (match: Match): string => {
     if (match.status === 'finished') return 'Terminado';
     if (match.status === 'live') return 'Partido en Juego';
-    const kickoff = new Date(match.dateTime).getTime();
-    const now = new Date('2026-05-27T13:48:26Z').getTime();
-    if (kickoff < now) return 'Comenzado';
-    return 'Faltan menos de 15min';
+    return 'Comenzado';
   };
 
   const getLocalDateStr = (dateStr: string) => {
@@ -170,7 +174,20 @@ export default function MatchesList({
         </div>
         <div className="px-3 py-1.5 bg-indigo-50/70 border border-indigo-100/40 rounded-lg text-[11px] text-indigo-800 flex items-center gap-2">
           <Activity className="w-3.5 h-3.5 animate-pulse text-indigo-500" />
-          <span>Hora Simulador: <strong className="font-mono">2026-05-27 13:48 UTC</strong></span>
+          <span>Hora del Sistema: <strong className="font-mono">{
+            now.toLocaleDateString('es-ES', {
+              year: 'numeric',
+              month: '2-digit',
+              day: '2-digit'
+            })
+          } {
+            now.toLocaleTimeString('es-ES', {
+              hour: '2-digit',
+              minute: '2-digit',
+              second: '2-digit',
+              hour12: false
+            })
+          }</strong></span>
         </div>
       </div>
 
