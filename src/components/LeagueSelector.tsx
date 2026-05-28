@@ -414,6 +414,83 @@ export default function LeagueSelector({
         </div>
       </div>
 
+      {/* Panel de Control de Ligas (Solo Visible para Administradores) */}
+      {currentUser.isAdmin && (
+        <div className="border-t border-slate-100 pt-6 space-y-4">
+          <div className="flex flex-col space-y-1.5 animate-fadeIn">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5 select-none">
+              <Trophy className="w-4 h-4 text-indigo-500" />
+              Panel de Administración de Ligas (Global):
+            </h4>
+            <p className="text-[10px] text-slate-400 font-semibold select-none">
+              Como administrador, aquí puedes monitorear todas las ligas del sistema, ver sus configuraciones y seleccionar una para auditar sus integrantes.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {allLeagues.map((league) => {
+              const isSelected = currentLeague?.code === league.code;
+              const creatorUser = allUsers.find(u => u.id === league.creatorId);
+              return (
+                <div
+                  key={league.code}
+                  onClick={() => onSelectLeague(league)}
+                  className={`border rounded-2xl p-4 transition-all cursor-pointer relative overflow-hidden flex flex-col justify-between ${
+                    isSelected
+                      ? 'border-indigo-400 bg-indigo-50/5 ring-4 ring-indigo-500/5 shadow-md'
+                      : 'border-slate-150 bg-white hover:border-slate-350 hover:shadow-xs'
+                  }`}
+                >
+                  {/* Active Indicator Badge */}
+                  {isSelected && (
+                    <div className="absolute top-0 right-0 bg-indigo-600 text-white text-[8px] font-black uppercase px-2 py-0.5 rounded-bl-lg tracking-wider animate-fadeIn">
+                      Activa
+                    </div>
+                  )}
+
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xl select-none">🏆</span>
+                      <div>
+                        <h5 className="text-xs font-black text-slate-800 font-sans leading-tight">{league.name}</h5>
+                        <span className="text-[9px] font-mono font-bold text-indigo-600 uppercase tracking-wider">Código: {league.code}</span>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100 text-[10px] text-slate-500 font-semibold">
+                      <div>
+                        <span className="text-slate-400 block text-[8px] uppercase tracking-wider font-bold">Integrantes</span>
+                        <span className="text-slate-700 font-bold font-mono">{(league.members || []).length} miembros</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block text-[8px] uppercase tracking-wider font-bold">Inscripción</span>
+                        <span className="text-slate-700 font-bold font-mono">${league.costPerEntry || 0}.00 USD</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between gap-2 text-[9px] text-slate-550 text-slate-500">
+                    <span className="truncate">
+                      👑 <strong className="text-slate-700 font-bold">{creatorUser?.name || 'Sistema'}</strong>
+                    </span>
+                    <button
+                      type="button"
+                      className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all ${
+                        isSelected
+                          ? 'bg-indigo-100 text-indigo-800 cursor-default'
+                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                      }`}
+                    >
+                      {isSelected ? 'Ver Miembros' : 'Seleccionar'}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Sección de Pagos y Saldo de la Liga */}
       {currentLeague && (
         <div className="border-t border-slate-100 pt-6 space-y-4">
