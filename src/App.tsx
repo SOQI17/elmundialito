@@ -625,7 +625,10 @@ export default function App() {
   };
 
   const enrichedLeagues = leagues.map(l => ({ ...l, members: leaguesMembersMap[l.code] || [] }));
-  const enrichedCurrentLeague = currentLeague ? { ...currentLeague, members: leaguesMembersMap[currentLeague.code] || [] } : null;
+  const latestLeagueData = currentLeague ? leagues.find(l => l.code === currentLeague.code) : null;
+  const enrichedCurrentLeague = latestLeagueData 
+    ? { ...latestLeagueData, members: leaguesMembersMap[latestLeagueData.code] || [] } 
+    : null;
   const currentStats = calculateLeaderboardStats();
   const myRank = currentStats.findIndex(s => s.userId === currentUser?.id) + 1;
   const totalMatchesLoaded = matches.length;
