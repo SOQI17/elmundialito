@@ -109,7 +109,7 @@ export default function Leaderboard({
       });
     }
 
-    let activeParticipants = Array.from(activeParticipantsMap.values());
+    let activeParticipants = Array.from(activeParticipantsMap.values()).filter(u => !u.isAdmin);
 
     // Filter active users based on the selected league
     if (currentLeague) {

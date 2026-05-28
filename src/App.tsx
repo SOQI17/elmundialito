@@ -464,7 +464,7 @@ export default function App() {
   };
 
   const handleSaveForecast = async (matchId: string, homeScore: number, awayScore: number) => {
-    if (!currentUser) return;
+    if (!currentUser || currentUser.isAdmin) return;
     const match = matches.find(m => m.id === matchId);
     if (!match) return;
 
@@ -650,7 +650,7 @@ export default function App() {
         map.set(f.userId, { id: f.userId, name: f.userId === currentUser?.id ? currentUser.name : `Participante (${f.userId.substring(0,5)})`, avatar: f.userId === currentUser?.id ? currentUser.avatar : '👤' });
       }
     });
-    let participants = Array.from(map.values());
+    let participants = Array.from(map.values()).filter(u => !u.isAdmin);
     if (currentLeague) {
       const memberIds = leaguesMembersMap[currentLeague.code] || [];
       participants = participants.filter(u => memberIds.includes(u.id));
@@ -818,27 +818,55 @@ export default function App() {
 
             {/* Stats */}
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 w-full md:w-auto">
-              <div className="p-3 bg-indigo-600/55 rounded-xl border border-indigo-500/30">
-                <span className="text-[10px] text-indigo-200 uppercase font-bold tracking-wider block">Puesto en Liga</span>
-                <span className="text-xl font-black font-mono">
-                  {myRank > 0 ? `#${myRank}` : 'S/C'}
-                  <span className="text-xs font-normal text-indigo-300 ml-1">de {currentStats.length}</span>
-                </span>
-              </div>
-              <div className="p-3 bg-indigo-600/55 rounded-xl border border-indigo-500/30">
-                <span className="text-[10px] text-indigo-200 uppercase font-bold tracking-wider block">Tus Pronósticos</span>
-                <span className="text-xl font-black font-mono">
-                  {totalPredictionMade}
-                  <span className="text-xs font-normal text-indigo-300"> / {totalMatchesLoaded}</span>
-                </span>
-              </div>
-              <div className="p-3 bg-indigo-600/55 rounded-xl border border-indigo-500/30 col-span-2 sm:col-span-1">
-                <span className="text-[10px] text-indigo-200 uppercase font-bold tracking-wider block">Puntos Acumulados</span>
-                <span className="text-xl font-black font-mono text-amber-300">
-                  {currentStats.find(s => s.userId === currentUser.id)?.totalPoints ?? 0}
-                  <span className="text-xs font-normal text-indigo-300 ml-0.5"> Pts</span>
-                </span>
-              </div>
+              {currentUser?.isAdmin ? (
+                <>
+                  <div className="p-3 bg-indigo-600/55 rounded-xl border border-indigo-500/30">
+                    <span className="text-[10px] text-indigo-200 uppercase font-bold tracking-wider block">Participantes</span>
+                    <span className="text-xl font-black font-mono text-white">
+                      {currentStats.length}
+                      <span className="text-xs font-normal text-indigo-300 ml-1">miembros</span>
+                    </span>
+                  </div>
+                  <div className="p-3 bg-indigo-600/55 rounded-xl border border-indigo-500/30">
+                    <span className="text-[10px] text-indigo-200 uppercase font-bold tracking-wider block">Pozo Recaudado</span>
+                    <span className="text-xl font-black font-mono text-emerald-350">
+                      ${currentLeague ? currentLeague.members.length * (currentLeague.costPerEntry || 0) : 0}
+                      <span className="text-xs font-normal text-indigo-300 ml-0.5"> USD</span>
+                    </span>
+                  </div>
+                  <div className="p-3 bg-indigo-600/55 rounded-xl border border-indigo-500/30 col-span-2 sm:col-span-1">
+                    <span className="text-[10px] text-indigo-200 uppercase font-bold tracking-wider block">Partidos Jugados</span>
+                    <span className="text-xl font-black font-mono text-amber-300">
+                      {matches.filter(m => m.status === 'finished').length}
+                      <span className="text-xs font-normal text-indigo-300 ml-1">/ {totalMatchesLoaded}</span>
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="p-3 bg-indigo-600/55 rounded-xl border border-indigo-500/30">
+                    <span className="text-[10px] text-indigo-200 uppercase font-bold tracking-wider block">Puesto en Liga</span>
+                    <span className="text-xl font-black font-mono">
+                      {myRank > 0 ? `#${myRank}` : 'S/C'}
+                      <span className="text-xs font-normal text-indigo-300 ml-1">de {currentStats.length}</span>
+                    </span>
+                  </div>
+                  <div className="p-3 bg-indigo-600/55 rounded-xl border border-indigo-500/30">
+                    <span className="text-[10px] text-indigo-200 uppercase font-bold tracking-wider block">Tus Pronósticos</span>
+                    <span className="text-xl font-black font-mono">
+                      {totalPredictionMade}
+                      <span className="text-xs font-normal text-indigo-300"> / {totalMatchesLoaded}</span>
+                    </span>
+                  </div>
+                  <div className="p-3 bg-indigo-600/55 rounded-xl border border-indigo-500/30 col-span-2 sm:col-span-1">
+                    <span className="text-[10px] text-indigo-200 uppercase font-bold tracking-wider block">Puntos Acumulados</span>
+                    <span className="text-xl font-black font-mono text-amber-300">
+                      {currentStats.find(s => s.userId === currentUser?.id)?.totalPoints ?? 0}
+                      <span className="text-xs font-normal text-indigo-300 ml-0.5"> Pts</span>
+                    </span>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>

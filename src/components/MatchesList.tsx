@@ -254,7 +254,7 @@ export default function MatchesList({
               {availableDatesInPhase.map((dateStr) => {
                 const isSelected = activeDateFilter === dateStr;
                 const { totalCount, predictedCount } = getDateStats(dateStr);
-                const allDone = predictedCount >= totalCount;
+                const allDone = !currentUser.isAdmin && (predictedCount >= totalCount);
                 return (
                   <button
                     key={dateStr}
@@ -267,7 +267,7 @@ export default function MatchesList({
                     <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold font-mono ${
                       isSelected ? 'bg-white/20 text-white' : allDone ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700'
                     }`}>
-                      {predictedCount}/{totalCount}
+                      {currentUser.isAdmin ? `${totalCount} part.` : `${predictedCount}/${totalCount}`}
                     </span>
                   </button>
                 );
@@ -398,72 +398,85 @@ export default function MatchesList({
 
                             {/* ── FORECAST FORM ── */}
                             <div className="md:col-span-5 bg-slate-100/30 border border-slate-150 rounded-2xl p-4 flex flex-col items-center justify-center space-y-2">
-                              <span className="text-[10px] font-bold text-indigo-700 uppercase tracking-widest flex items-center gap-1">
-                                <Sparkles className="w-3 h-3 text-indigo-500" />
-                                Tu Pronóstico ({currentUser.avatar} {currentUser.name.split(' ')[0]})
-                              </span>
+                              {currentUser.isAdmin ? (
+                                <div className="text-center py-2 space-y-1 select-none">
+                                  <span className="text-[9px] font-extrabold text-indigo-700 bg-indigo-50 border border-indigo-150 px-2 py-0.5 rounded-md">
+                                    🛡️ Cuenta Administradora
+                                  </span>
+                                  <p className="text-[10px] text-slate-400 font-semibold max-w-[220px] leading-tight mt-1">
+                                    Los administradores del sistema solo auditan y controlan la liga. No participan con pronósticos.
+                                  </p>
+                                </div>
+                              ) : (
+                                <>
+                                  <span className="text-[10px] font-bold text-indigo-700 uppercase tracking-widest flex items-center gap-1">
+                                    <Sparkles className="w-3 h-3 text-indigo-500" />
+                                    Tu Pronóstico ({currentUser.avatar} {currentUser.name.split(' ')[0]})
+                                  </span>
 
-                              <div className="flex items-center gap-4">
-                                {/* Home score input */}
-                                <div className="flex items-center gap-1.5">
-                                  {!locked && (
-                                    <button onClick={() => handleScoreChange(match.id, 'home', userForecast?.homeScore || 0, -1)} className="w-7 h-7 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg text-sm font-bold flex items-center justify-center shadow-xs cursor-pointer">-</button>
-                                  )}
-                                  <div className="w-10 h-10 bg-white border border-slate-200 font-mono font-bold text-slate-850 rounded-xl flex items-center justify-center text-lg shadow-inner">
-                                    {displayHomeScore !== undefined ? displayHomeScore : '-'}
+                                  <div className="flex items-center gap-4">
+                                    {/* Home score input */}
+                                    <div className="flex items-center gap-1.5">
+                                      {!locked && (
+                                        <button onClick={() => handleScoreChange(match.id, 'home', userForecast?.homeScore || 0, -1)} className="w-7 h-7 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg text-sm font-bold flex items-center justify-center shadow-xs cursor-pointer">-</button>
+                                      )}
+                                      <div className="w-10 h-10 bg-white border border-slate-200 font-mono font-bold text-slate-850 rounded-xl flex items-center justify-center text-lg shadow-inner">
+                                        {displayHomeScore !== undefined ? displayHomeScore : '-'}
+                                      </div>
+                                      {!locked && (
+                                        <button onClick={() => handleScoreChange(match.id, 'home', userForecast?.homeScore || 0, 1)} className="w-7 h-7 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg text-sm font-bold flex items-center justify-center shadow-xs cursor-pointer">+</button>
+                                      )}
+                                    </div>
+
+                                    <span className="text-sm font-bold text-slate-400 font-mono">:</span>
+
+                                    {/* Away score input */}
+                                    <div className="flex items-center gap-1.5">
+                                      {!locked && (
+                                        <button onClick={() => handleScoreChange(match.id, 'away', userForecast?.awayScore || 0, -1)} className="w-7 h-7 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg text-sm font-bold flex items-center justify-center shadow-xs cursor-pointer">-</button>
+                                      )}
+                                      <div className="w-10 h-10 bg-white border border-slate-200 font-mono font-bold text-slate-850 rounded-xl flex items-center justify-center text-lg shadow-inner">
+                                        {displayAwayScore !== undefined ? displayAwayScore : '-'}
+                                      </div>
+                                      {!locked && (
+                                        <button onClick={() => handleScoreChange(match.id, 'away', userForecast?.awayScore || 0, 1)} className="w-7 h-7 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg text-sm font-bold flex items-center justify-center shadow-xs cursor-pointer">+</button>
+                                      )}
+                                    </div>
                                   </div>
-                                  {!locked && (
-                                    <button onClick={() => handleScoreChange(match.id, 'home', userForecast?.homeScore || 0, 1)} className="w-7 h-7 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg text-sm font-bold flex items-center justify-center shadow-xs cursor-pointer">+</button>
+
+                                  {!userForecast && !hasDraft && (
+                                    <span className="text-[10px] text-amber-600 font-semibold">⚠️ Requiere ingresar pronóstico</span>
                                   )}
-                                </div>
 
-                                <span className="text-sm font-bold text-slate-400 font-mono">:</span>
-
-                                {/* Away score input */}
-                                <div className="flex items-center gap-1.5">
-                                  {!locked && (
-                                    <button onClick={() => handleScoreChange(match.id, 'away', userForecast?.awayScore || 0, -1)} className="w-7 h-7 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg text-sm font-bold flex items-center justify-center shadow-xs cursor-pointer">-</button>
+                                  {isPendingValue && !locked && (
+                                    <div className="flex flex-col items-center gap-1.5 w-full">
+                                      <span className="text-[10px] text-indigo-600 font-black animate-pulse uppercase tracking-wider">⚡ Cambios sin confirmar</span>
+                                      <button
+                                        onClick={() => handleCommitForecast(match.id)}
+                                        disabled={savingMatchIds[match.id]}
+                                        className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] py-1 px-3 rounded-lg shadow-xs hover:shadow-md transition-all flex items-center justify-center gap-1 cursor-pointer"
+                                      >
+                                        {savingMatchIds[match.id] ? <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></span> : <CheckSquare className="w-3.5 h-3.5" />}
+                                        <span>Confirmar Pronóstico</span>
+                                      </button>
+                                    </div>
                                   )}
-                                  <div className="w-10 h-10 bg-white border border-slate-200 font-mono font-bold text-slate-850 rounded-xl flex items-center justify-center text-lg shadow-inner">
-                                    {displayAwayScore !== undefined ? displayAwayScore : '-'}
-                                  </div>
-                                  {!locked && (
-                                    <button onClick={() => handleScoreChange(match.id, 'away', userForecast?.awayScore || 0, 1)} className="w-7 h-7 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg text-sm font-bold flex items-center justify-center shadow-xs cursor-pointer">+</button>
+
+                                  {isPlayed && userForecast && (
+                                    <div className="pt-2 border-t border-slate-100/50 w-full flex justify-center">
+                                      {(() => {
+                                        const rating = getScoreBadge(match, userForecast);
+                                        return <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full ${rating.style}`}>{rating.label} (+{rating.points} Pts)</span>;
+                                      })()}
+                                    </div>
                                   )}
-                                </div>
-                              </div>
-
-                              {!userForecast && !hasDraft && (
-                                <span className="text-[10px] text-amber-600 font-semibold">⚠️ Requiere ingresar pronóstico</span>
-                              )}
-
-                              {isPendingValue && !locked && (
-                                <div className="flex flex-col items-center gap-1.5 w-full">
-                                  <span className="text-[10px] text-indigo-600 font-black animate-pulse uppercase tracking-wider">⚡ Cambios sin confirmar</span>
-                                  <button
-                                    onClick={() => handleCommitForecast(match.id)}
-                                    disabled={savingMatchIds[match.id]}
-                                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] py-1 px-3 rounded-lg shadow-xs hover:shadow-md transition-all flex items-center justify-center gap-1 cursor-pointer"
-                                  >
-                                    {savingMatchIds[match.id] ? <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></span> : <CheckSquare className="w-3.5 h-3.5" />}
-                                    <span>Confirmar Pronóstico</span>
-                                  </button>
-                                </div>
-                              )}
-
-                              {isPlayed && userForecast && (
-                                <div className="pt-2 border-t border-slate-100/50 w-full flex justify-center">
-                                  {(() => {
-                                    const rating = getScoreBadge(match, userForecast);
-                                    return <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full ${rating.style}`}>{rating.label} (+{rating.points} Pts)</span>;
-                                  })()}
-                                </div>
+                                </>
                               )}
                             </div>
 
                             {/* ── ACTIONS ── */}
                             <div className="md:col-span-2 flex flex-col gap-2.5 items-center md:items-end justify-center w-full">
-                              {isPendingValue && !locked && (
+                              {isPendingValue && !locked && !currentUser.isAdmin && (
                                 <button
                                   onClick={() => handleCommitForecast(match.id)}
                                   disabled={savingMatchIds[match.id]}
@@ -477,7 +490,7 @@ export default function MatchesList({
                                 </button>
                               )}
 
-                              {userForecast && !isPendingValue && (
+                              {userForecast && !isPendingValue && !currentUser.isAdmin && (
                                 <div className="flex items-center gap-1.5 text-[10px] font-black text-emerald-700 bg-emerald-50/80 border border-emerald-200 px-3 py-1.5 rounded-xl uppercase tracking-wider">
                                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>
                                   <span>Apuesta Registrada</span>
