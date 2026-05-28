@@ -1,4 +1,4 @@
-export type MatchPhase = 'group' | 'octavos' | 'cuartos' | 'semifinal' | 'final';
+export type MatchPhase = 'group' | 'dieciseisavos' | 'octavos' | 'cuartos' | 'semifinal' | 'final';
 
 export interface Team {
   id: string;

@@ -20,6 +20,7 @@ interface MatchesListProps {
 
 const PHASES_LABELS: Record<MatchPhase, string> = {
   group: 'Fase de Grupos',
+  dieciseisavos: 'Dieciseisavos de Final',
   octavos: 'Octavos de Final',
   cuartos: 'Cuartos de Final',
   semifinal: 'Semifinal',
@@ -161,7 +162,7 @@ export default function MatchesList({
 
       {/* Phase tabs */}
       <div className="flex flex-wrap gap-1.5 p-1 bg-slate-50 rounded-xl" id="phase-tabs-container">
-        {(['group', 'octavos', 'cuartos', 'semifinal', 'final'] as MatchPhase[]).map((phase) => (
+        {(['group', 'dieciseisavos', 'octavos', 'cuartos', 'semifinal', 'final'] as MatchPhase[]).map((phase) => (
           <button
             key={phase}
             onClick={() => { setActivePhase(phase); setActiveGroupFilter('all'); setActiveDateFilter('all'); }}
@@ -217,7 +218,7 @@ export default function MatchesList({
                     : 'bg-slate-50 border-slate-200/60 text-slate-600 hover:text-slate-950 hover:bg-slate-100'
                 }`}
               >
-                📅 Todos los Días ({activePhase === 'group' ? 48 : 5} partidos)
+                📅 Todos los Días ({matches.filter(m => m.phase === activePhase).length} partidos)
               </button>
               {availableDatesInPhase.map((dateStr) => {
                 const isSelected = activeDateFilter === dateStr;
