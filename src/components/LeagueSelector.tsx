@@ -213,82 +213,84 @@ export default function LeagueSelector({
       </div>
 
       {/* Grid of switchers */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* User profile selection */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-              <Users className="w-4 h-4 text-slate-400" />
-              Simular como Participante:
-            </h4>
-            <button
-              id="btn-show-add-user"
-              onClick={() => setShowAddUser(!showAddUser)}
-              className="text-indigo-600 hover:text-indigo-700 text-xs font-semibold flex items-center gap-0.5"
-            >
-              <Plus className="w-3 h-3" />
-              Crear Perfil
-            </button>
-          </div>
+      <div className={`grid gap-6 ${currentUser.isAdmin ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1'}`}>
+        {/* User profile selection (Only visible to Admins) */}
+        {currentUser.isAdmin && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                <Users className="w-4 h-4 text-slate-400" />
+                Simular como Participante:
+              </h4>
+              <button
+                id="btn-show-add-user"
+                onClick={() => setShowAddUser(!showAddUser)}
+                className="text-indigo-600 hover:text-indigo-700 text-xs font-semibold flex items-center gap-0.5"
+              >
+                <Plus className="w-3 h-3" />
+                Crear Perfil
+              </button>
+            </div>
 
-          {showAddUser && (
-            <form onSubmit={handleCreateUser} className="bg-slate-50 border border-slate-100 rounded-xl p-4 space-y-3">
-              <span className="text-xs font-bold text-slate-700 block">Registrar nuevo amigo</span>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  placeholder="Nombre del amigo..."
-                  value={newUserName}
-                  onChange={(e) => setNewUserName(e.target.value)}
-                  className="bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs font-medium text-slate-800 focus:outline-none focus:border-indigo-500 grow"
-                  required
-                />
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-all shadow-xs"
-                >
-                  Agregar
-                </button>
-              </div>
-              <div className="flex flex-wrap gap-2.5 pt-1.5">
-                {AVATARS.map((emoji) => (
+            {showAddUser && (
+              <form onSubmit={handleCreateUser} className="bg-slate-50 border border-slate-100 rounded-xl p-4 space-y-3">
+                <span className="text-xs font-bold text-slate-700 block">Registrar nuevo amigo</span>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Nombre del amigo..."
+                    value={newUserName}
+                    onChange={(e) => setNewUserName(e.target.value)}
+                    className="bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs font-medium text-slate-800 focus:outline-none focus:border-indigo-500 grow"
+                    required
+                  />
                   <button
-                    key={emoji}
-                    type="button"
-                    onClick={() => setNewUserAvatar(emoji)}
-                    className={`text-xl p-1.5 rounded-lg border transition-all ${
-                      newUserAvatar === emoji ? 'border-indigo-500 bg-white scale-110 shadow-xs' : 'border-transparent hover:bg-white'
+                    type="submit"
+                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-all shadow-xs"
+                  >
+                    Agregar
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2.5 pt-1.5">
+                  {AVATARS.map((emoji) => (
+                    <button
+                      key={emoji}
+                      type="button"
+                      onClick={() => setNewUserAvatar(emoji)}
+                      className={`text-xl p-1.5 rounded-lg border transition-all ${
+                        newUserAvatar === emoji ? 'border-indigo-500 bg-white scale-110 shadow-xs' : 'border-transparent hover:bg-white'
+                      }`}
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+              </form>
+            )}
+
+            <div className="flex flex-wrap gap-2">
+              {allUsers.map((user) => {
+                const isSelected = currentUser.id === user.id;
+                return (
+                  <button
+                    key={user.id}
+                    id={`select-user-${user.id}`}
+                    onClick={() => onSelectUser(user)}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-semibold transition-all ${
+                      isSelected
+                        ? 'bg-indigo-600 border-indigo-600 text-white shadow-xs'
+                        : 'bg-white border-slate-150 text-slate-700 hover:bg-slate-50'
                     }`}
                   >
-                    {emoji}
+                    <span>{user.avatar}</span>
+                    <span>{user.name.split(' ')[0]}</span>
+                    {isSelected && <Check className="w-3.5 h-3.5" />}
                   </button>
-                ))}
-              </div>
-            </form>
-          )}
-
-          <div className="flex flex-wrap gap-2">
-            {allUsers.map((user) => {
-              const isSelected = currentUser.id === user.id;
-              return (
-                <button
-                  key={user.id}
-                  id={`select-user-${user.id}`}
-                  onClick={() => onSelectUser(user)}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-semibold transition-all ${
-                    isSelected
-                      ? 'bg-indigo-600 border-indigo-600 text-white shadow-xs'
-                      : 'bg-white border-slate-150 text-slate-700 hover:bg-slate-50'
-                  }`}
-                >
-                  <span>{user.avatar}</span>
-                  <span>{user.name.split(' ')[0]}</span>
-                  {isSelected && <Check className="w-3.5 h-3.5" />}
-                </button>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Leagues / Pools Selector */}
         <div className="space-y-3">
