@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { INITIAL_MATCHES, INITIAL_LEAGUES } from './data';
-import { Match, Forecast, UserProfile, League, UserStats } from './types';
+import { Match, Forecast, UserProfile, League, UserStats, LeagueMemberInfo } from './types';
 import { calculateScore } from './utils/scoring';
 
 import { collection, doc, setDoc, getDoc, getDocs, onSnapshot, serverTimestamp, deleteDoc } from 'firebase/firestore';
@@ -44,6 +44,8 @@ export default function App() {
   const [matches, setMatches] = useState<Match[]>([]);
   const [forecasts, setForecasts] = useState<Forecast[]>([]);
   const [leaguesMembersMap, setLeaguesMembersMap] = useState<Record<string, string[]>>({});
+  const [currentMemberInfo, setCurrentMemberInfo] = useState<LeagueMemberInfo | null>(null);
+  const [pendingPayments, setPendingPayments] = useState<LeagueMemberInfo[]>([]);
 
   // ── 1. Auth listener ──────────────────────────────────────
   useEffect(() => {
@@ -272,7 +274,7 @@ export default function App() {
       const lData: League[] = [];
       snapshot.forEach(d => {
         const data = d.data();
-        lData.push({ code: data.code, name: data.name, creatorId: data.creatorId, members: [] });
+        lData.push({ code: data.code, name: data.name, creatorId: data.creatorId, members: [], bankConfig: data.bankConfig, costPerEntry: data.costPerEntry });
       });
       setLeagues(lData);
     }, (err) => {
@@ -293,6 +295,62 @@ export default function App() {
     );
     return () => unsubs.forEach(fn => fn());
   }, [leagues]);
+
+  // ── 7. Active member info (payment / balance) ────────────────
+  useEffect(() => {
+    if (!currentUser || !currentLeague) {
+      setCurrentMemberInfo(null);
+      return;
+    }
+    const unsubscribe = onSnapshot(doc(db, 'leagues', currentLeague.code, 'members', currentUser.id), (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        setCurrentMemberInfo({
+          userId: currentUser.id,
+          leagueCode: currentLeague.code,
+          joinedAt: data.joinedAt || '',
+          paid: data.paid || false,
+          balance: data.balance || 0,
+          paymentStatus: data.paymentStatus || 'unpaid',
+          paymentVoucherUrl: data.paymentVoucherUrl,
+          paymentVoucherAmount: data.paymentVoucherAmount,
+          paymentCode: data.paymentCode
+        });
+      } else {
+        setCurrentMemberInfo(null);
+      }
+    }, (err) => console.error('Active member info sync offline:', err));
+    return () => unsubscribe();
+  }, [currentUser, currentLeague]);
+
+  // ── 8. Pending payments for the creator ──────────────────────
+  useEffect(() => {
+    if (!currentUser || !currentLeague || currentLeague.creatorId !== currentUser.id) {
+      setPendingPayments([]);
+      return;
+    }
+    const unsubscribe = onSnapshot(collection(db, 'leagues', currentLeague.code, 'members'), (snapshot) => {
+      const pending: LeagueMemberInfo[] = [];
+      snapshot.forEach(d => {
+        const data = d.data();
+        if (data.paymentStatus === 'pending') {
+          pending.push({
+            userId: d.id,
+            leagueCode: currentLeague.code,
+            joinedAt: data.joinedAt || '',
+            paid: data.paid || false,
+            balance: data.balance || 0,
+            paymentStatus: data.paymentStatus,
+            paymentVoucherUrl: data.paymentVoucherUrl,
+            paymentVoucherAmount: data.paymentVoucherAmount,
+            paymentCode: data.paymentCode
+          });
+        }
+      });
+      setPendingPayments(pending);
+    }, (err) => console.error('Pending payments sync offline:', err));
+    return () => unsubscribe();
+  }, [currentUser, currentLeague]);
 
   // ── Event handlers ────────────────────────────────────────
   const handleSelectSimulatedProfile = (profile: UserProfile) => setCurrentUser(profile);
@@ -393,6 +451,57 @@ export default function App() {
       await setDoc(doc(db, 'leagues', code), { name: newName }, { merge: true });
     } catch (err) {
       console.error('Error updating league name:', err);
+    }
+  };
+
+  const handleSavePaymentSettings = async (bankConfig: League['bankConfig'], costPerEntry: number) => {
+    if (!currentLeague) return;
+    try {
+      await setDoc(doc(db, 'leagues', currentLeague.code), { bankConfig, costPerEntry }, { merge: true });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `leagues/${currentLeague.code}`);
+    }
+  };
+
+  const handleSubmitVoucher = async (amount: number, code: string, filename: string) => {
+    if (!currentUser || !currentLeague) return;
+    try {
+      await setDoc(doc(db, 'leagues', currentLeague.code, 'members', currentUser.id), {
+        paymentStatus: 'pending',
+        paymentVoucherAmount: amount,
+        paymentCode: code,
+        paymentVoucherUrl: filename,
+        paid: false
+      }, { merge: true });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `leagues/${currentLeague.code}/members/${currentUser.id}`);
+    }
+  };
+
+  const handleApprovePayment = async (leagueCode: string, userId: string, amount: number) => {
+    try {
+      const docRef = doc(db, 'leagues', leagueCode, 'members', userId);
+      const snap = await getDoc(docRef);
+      const currentBalance = snap.exists() ? (snap.data().balance || 0) : 0;
+      
+      await setDoc(docRef, {
+        paid: true,
+        paymentStatus: 'approved',
+        balance: currentBalance + amount
+      }, { merge: true });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `leagues/${leagueCode}/members/${userId}`);
+    }
+  };
+
+  const handleRejectPayment = async (leagueCode: string, userId: string) => {
+    try {
+      await setDoc(doc(db, 'leagues', leagueCode, 'members', userId), {
+        paymentStatus: 'rejected',
+        paid: false
+      }, { merge: true });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `leagues/${leagueCode}/members/${userId}`);
     }
   };
 
@@ -620,7 +729,7 @@ export default function App() {
         <div className="space-y-8">
           {activeTab === 'calendar' && <MatchesList matches={matches} forecasts={forecasts} currentUser={currentUser} allUsers={users} onSaveForecast={handleSaveForecast} onUpdateMatchResult={handleUpdateMatchResult} />}
           {activeTab === 'leaderboard' && <Leaderboard stats={currentStats} currentUser={currentUser} matches={matches} forecasts={forecasts} users={users} currentLeague={enrichedCurrentLeague} />}
-          {activeTab === 'leagues' && <LeagueSelector currentUser={currentUser} allUsers={users} currentLeague={enrichedCurrentLeague} allLeagues={enrichedLeagues} onSelectUser={handleSelectSimulatedProfile} onSelectLeague={l => setCurrentLeague(l)} onAddUser={handleAddUser} onAddLeague={handleAddLeague} onJoinLeague={handleJoinLeague} />}
+          {activeTab === 'leagues' && <LeagueSelector currentUser={currentUser} allUsers={users} currentLeague={enrichedCurrentLeague} allLeagues={enrichedLeagues} onSelectUser={handleSelectSimulatedProfile} onSelectLeague={l => setCurrentLeague(l)} onAddUser={handleAddUser} onAddLeague={handleAddLeague} onJoinLeague={handleJoinLeague} onSavePaymentSettings={handleSavePaymentSettings} onSubmitVoucher={handleSubmitVoucher} memberInfo={currentMemberInfo || undefined} />}
           {activeTab === 'sandbox' && <InteractiveSandbox />}
           {activeTab === 'admin' && currentUser?.isAdmin && (
             <AdminPanel
@@ -631,6 +740,11 @@ export default function App() {
               leagues={enrichedLeagues}
               onDeleteLeague={handleDeleteLeague}
               onUpdateLeagueName={handleUpdateLeagueName}
+              pendingPayments={pendingPayments}
+              allUsers={users}
+              onApprovePayment={handleApprovePayment}
+              onRejectPayment={handleRejectPayment}
+              currentLeague={enrichedCurrentLeague}
             />
           )}
         </div>

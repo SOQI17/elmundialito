@@ -42,6 +42,27 @@ export interface League {
   name: string;
   creatorId: string;
   members: string[]; // User IDs belonging to this league
+  costPerEntry?: number;
+  bankConfig?: {
+    bankName: string;
+    accountType: 'ahorros' | 'corriente';
+    accountNumber: string;
+    ownerName: string;
+    ownerId: string; // Cédula o RUC
+    ownerEmail?: string;
+  };
+}
+
+export interface LeagueMemberInfo {
+  userId: string;
+  leagueCode: string;
+  joinedAt: string;
+  paid?: boolean;
+  balance?: number; // Saldo apostado
+  paymentStatus?: 'unpaid' | 'pending' | 'approved' | 'rejected';
+  paymentVoucherUrl?: string;
+  paymentVoucherAmount?: number;
+  paymentCode?: string;
 }
 
 export interface UserProfile {

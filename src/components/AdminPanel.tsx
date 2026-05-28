@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Match, MatchPhase, League } from '../types';
+import { Match, MatchPhase, League, LeagueMemberInfo, UserProfile } from '../types';
 import { Settings, Save, RefreshCw, AlertTriangle, Play, CheckCircle, Globe, Wifi, Check, Sparkles, Loader2, Link2, AlertCircle, Trash2, Edit3, Users } from 'lucide-react';
 import TeamFlag from './TeamFlag';
 
@@ -11,6 +11,11 @@ interface AdminPanelProps {
   leagues?: League[];
   onDeleteLeague?: (code: string) => void;
   onUpdateLeagueName?: (code: string, newName: string) => void;
+  pendingPayments?: LeagueMemberInfo[];
+  allUsers?: UserProfile[];
+  onApprovePayment?: (leagueCode: string, userId: string, amount: number) => Promise<void>;
+  onRejectPayment?: (leagueCode: string, userId: string) => Promise<void>;
+  currentLeague?: League | null;
 }
 
 export default function AdminPanel({
@@ -20,7 +25,12 @@ export default function AdminPanel({
   onTriggerBootstrap,
   leagues = [],
   onDeleteLeague,
-  onUpdateLeagueName
+  onUpdateLeagueName,
+  pendingPayments = [],
+  allUsers = [],
+  onApprovePayment,
+  onRejectPayment,
+  currentLeague = null
 }: AdminPanelProps) {
   const [editingScores, setEditingScores] = useState<Record<string, { home: number; away: number; status: Match['status'] }>>({});
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
@@ -561,6 +571,81 @@ export default function AdminPanel({
                 </tbody>
               </table>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bandeja de Aprobación de Pagos */}
+      {currentLeague && pendingPayments && pendingPayments.length > 0 && (
+        <div className="bg-white rounded-2xl border border-slate-100 p-6 space-y-4 shadow-xs" id="admin-payments-tray-card">
+          <div className="pb-3 border-b border-slate-100 select-none">
+            <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2 font-sans">
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-ping"></span>
+              Bandeja de Pagos por Verificar (Liga Activa: {currentLeague.name})
+              <span className="px-2 py-0.5 bg-amber-100 border border-amber-200 text-amber-800 text-[8px] font-black uppercase rounded-md tracking-wider">
+                {pendingPayments.length} Pendientes
+              </span>
+            </h3>
+            <p className="text-[10px] text-slate-505 text-slate-500 mt-1 font-medium">
+              Revisa los comprobantes bancarios transferidos a tus cuentas y aprueba o rechaza el saldo correspondiente.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {pendingPayments.map((payment) => {
+              const userProfile = allUsers?.find(u => u.id === payment.userId);
+              return (
+                <div key={payment.userId} className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-3.5 shadow-inner">
+                  <div className="flex items-center justify-between select-none">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xl">{userProfile?.avatar || '👤'}</span>
+                      <div>
+                        <span className="font-bold text-slate-800 text-xs">{userProfile?.name || 'Cargando...'}</span>
+                        <span className="text-[8px] text-slate-400 font-semibold block uppercase">Cód. Transacción: {payment.paymentCode || '-'}</span>
+                      </div>
+                    </div>
+                    <span className="font-mono font-extrabold text-emerald-600 text-sm bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-lg animate-pulse">
+                      ${payment.paymentVoucherAmount}.00 USD
+                    </span>
+                  </div>
+
+                  <div className="bg-slate-950/95 border border-slate-850 rounded-lg p-2.5 text-slate-300 font-mono text-[9px] flex justify-between items-center group leading-relaxed">
+                    <div className="truncate pr-2">
+                      📄 Comprobante: <span className="text-slate-400 font-bold">{payment.paymentVoucherUrl || 'comprobante.png'}</span>
+                    </div>
+                    <span className="text-[8px] font-black text-indigo-400 uppercase select-none tracking-wider shrink-0 bg-indigo-500/10 border border-indigo-500/20 px-1.5 py-0.5 rounded animate-pulse">
+                      🔎 Analizado con IA
+                    </span>
+                  </div>
+
+                  <div className="flex gap-2 select-none">
+                    <button
+                      onClick={async () => {
+                        if (onApprovePayment && currentLeague) {
+                          await onApprovePayment(currentLeague.code, payment.userId, payment.paymentVoucherAmount || 0);
+                        }
+                      }}
+                      className="flex-1 py-2 bg-emerald-650 bg-emerald-650 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1 transition-all cursor-pointer shadow-xs"
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                      Aprobar y Acreditar Saldo
+                    </button>
+                    <button
+                      onClick={async () => {
+                        if (window.confirm('¿Seguro que deseas rechazar este pago?')) {
+                          if (onRejectPayment && currentLeague) {
+                            await onRejectPayment(currentLeague.code, payment.userId);
+                          }
+                        }
+                      }}
+                      className="py-2 px-3.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-xl flex items-center justify-center gap-1 transition-all cursor-pointer border border-rose-200"
+                    >
+                      Rechazar
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

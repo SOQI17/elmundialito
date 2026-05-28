@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { UserProfile, League } from '../types';
 import { Users, Plus, UserPlus, KeyRound, Trophy, Check } from 'lucide-react';
+import LeaguePaymentSettings from './LeaguePaymentSettings';
+import VoucherScanner from './VoucherScanner';
 
 interface LeagueSelectorProps {
   currentUser: UserProfile;
@@ -12,6 +14,9 @@ interface LeagueSelectorProps {
   onAddUser: (name: string, avatar: string) => void;
   onAddLeague: (name: string, code: string) => Promise<boolean>;
   onJoinLeague: (code: string) => Promise<boolean>;
+  onSavePaymentSettings?: (bankConfig: League['bankConfig'], costPerEntry: number) => Promise<void>;
+  onSubmitVoucher?: (amount: number, code: string, filename: string) => Promise<void>;
+  memberInfo?: { paid?: boolean; balance?: number; paymentStatus?: string; paymentCode?: string };
 }
 
 const AVATARS = ['🦁', '🦊', '🐻', '🐼', '🐨', '🐱', '🐶', '🐯', '🐴', '🦄', '🦅', '🦉', '⚽', '🏆'];
@@ -25,7 +30,10 @@ export default function LeagueSelector({
   onSelectLeague,
   onAddUser,
   onAddLeague,
-  onJoinLeague
+  onJoinLeague,
+  onSavePaymentSettings,
+  onSubmitVoucher,
+  memberInfo
 }: LeagueSelectorProps) {
   const [showAddUser, setShowAddUser] = useState(false);
   const [newUserName, setNewUserName] = useState('');
@@ -40,6 +48,7 @@ export default function LeagueSelector({
 
   const [joinError, setJoinError] = useState('');
   const [leagueError, setLeagueError] = useState('');
+  const [showScanner, setShowScanner] = useState(false);
 
   const [formingLeague, setFormingLeague] = useState(false);
   const [joiningLeague, setJoiningLeague] = useState(false);
@@ -344,6 +353,92 @@ export default function LeagueSelector({
           </div>
         </div>
       </div>
+
+      {/* Sección de Pagos y Saldo de la Liga */}
+      {currentLeague && (
+        <div className="border-t border-slate-100 pt-6 space-y-4">
+          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-4">
+            
+            {/* Si el usuario actual es el CREADOR de la liga, puede configurar o editar datos bancarios */}
+            {currentLeague.creatorId === currentUser.id ? (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-650">
+                    <KeyRound className="w-4 h-4 text-indigo-600" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-slate-800 text-sm font-sans select-none">
+                      Eres el Creador y Administrador de este Grupo
+                    </h4>
+                    <p className="text-[10px] text-slate-500 font-medium">
+                      Configura o edita los datos bancarios donde los miembros te transferirán el dinero de la inscripción.
+                    </p>
+                  </div>
+                </div>
+                
+                {onSavePaymentSettings && (
+                  <LeaguePaymentSettings
+                    league={currentLeague}
+                    onSaveSettings={onSavePaymentSettings}
+                  />
+                )}
+              </div>
+            ) : (
+              /* Si el usuario actual es un MIEMBRO (no creador), ve su saldo y paga si es necesario */
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div className="space-y-1">
+                  <span className="text-[10px] uppercase font-black text-indigo-700 tracking-wider block select-none">
+                    Tu Cuenta en esta Liga
+                  </span>
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-sm font-bold text-slate-900 font-sans">{currentUser.name}</span>
+                    {memberInfo?.paid ? (
+                      <span className="px-2 py-0.5 bg-emerald-100 border border-emerald-200 text-emerald-800 text-[9px] font-black uppercase rounded-md tracking-wider flex items-center gap-1">
+                        ✓ Activo y Pagado
+                      </span>
+                    ) : memberInfo?.paymentStatus === 'pending' ? (
+                      <span className="px-2 py-0.5 bg-amber-100 border border-amber-200 text-amber-800 text-[9px] font-black uppercase rounded-md tracking-wider animate-pulse">
+                        ⏳ Verificación Pendiente
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 bg-rose-100 border border-rose-250 border-rose-200 text-rose-800 text-[9px] font-black uppercase rounded-md tracking-wider">
+                        ⚠️ Pendiente de Pago
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-[10px] text-slate-505 text-slate-500 font-semibold">
+                    Saldo Apostado Acreditado: <strong className="text-emerald-600 font-mono text-xs">${memberInfo?.balance || 0}.00 USD</strong>
+                  </div>
+                </div>
+
+                {/* Botón para abrir el escáner de pagos si está impago */}
+                {(!memberInfo?.paid || memberInfo?.paymentStatus === 'rejected') && (
+                  <button
+                    onClick={() => setShowScanner(true)}
+                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer select-none"
+                  >
+                    💸 Pagar Inscripción / Cargar Saldo
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Modal del Escáner de Comprobante OCR */}
+          {showScanner && onSubmitVoucher && (
+            <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+              <VoucherScanner
+                league={currentLeague}
+                onSubmitVoucher={async (amount, code, filename) => {
+                  await onSubmitVoucher(amount, code, filename);
+                  setShowScanner(false);
+                }}
+                onClose={() => setShowScanner(false)}
+              />
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
