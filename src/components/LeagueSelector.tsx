@@ -226,9 +226,9 @@ export default function LeagueSelector({
       </div>
 
       {/* Grid of switchers */}
-      <div className={`grid gap-6 ${currentUser.isAdmin ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1'}`}>
+      <div className={`grid gap-6 ${currentUser.isAdmin && currentLeague ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1'}`}>
         {/* User profile selection (Only visible to Admins) */}
-        {currentUser.isAdmin && (
+        {currentUser.isAdmin && currentLeague && (
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
