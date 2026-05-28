@@ -328,6 +328,10 @@ export default function VoucherScanner({ league, onSubmitVoucher, onClose }: Vou
             </div>
           </div>
 
+          <div className="bg-slate-900/60 border border-slate-850 border-slate-800/80 rounded-xl p-3 text-[10px] text-slate-400 font-medium select-none leading-relaxed">
+            💡 <strong>Consejo:</strong> Como el escaneo OCR corre de forma 100% estática en tu navegador (sin enviar tu comprobante a servidores externos de pago), el simulador extrae montos basándose en el **nombre del archivo** (ej: si lo renombras a <code className="text-indigo-400 font-bold font-mono">comprobante-1.00.png</code> leerá exactamente $1.00). Al subirlo con nombre genérico, predetermina el **costo oficial de tu liga ($9.00)**. Siéntete libre de modificar el monto a **$1.00** manualmente aquí arriba antes de enviar a revisión.
+          </div>
+
           <button
             type="submit"
             disabled={submitting || accountVerification === 'mismatch'}
