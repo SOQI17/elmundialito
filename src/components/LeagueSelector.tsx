@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { UserProfile, League } from '../types';
+import { UserProfile, League, LeagueMemberInfo } from '../types';
 import { Users, Plus, UserPlus, KeyRound, Trophy, Check, AlertCircle } from 'lucide-react';
 import LeaguePaymentSettings from './LeaguePaymentSettings';
 import VoucherScanner from './VoucherScanner';
@@ -18,6 +18,7 @@ interface LeagueSelectorProps {
   onSubmitVoucher?: (amount: number, code: string, filename: string) => Promise<void>;
   memberInfo?: { paid?: boolean; balance?: number; paymentStatus?: string; paymentCode?: string };
   onLeaveLeague?: (code: string, newCreatorId?: string) => Promise<void>;
+  leagueMembersData?: LeagueMemberInfo[];
 }
 
 const AVATARS = ['🦁', '🦊', '🐻', '🐼', '🐨', '🐱', '🐶', '🐯', '🐴', '🦄', '🦅', '🦉', '⚽', '🏆'];
@@ -35,7 +36,8 @@ export default function LeagueSelector({
   onSavePaymentSettings,
   onSubmitVoucher,
   memberInfo,
-  onLeaveLeague
+  onLeaveLeague,
+  leagueMembersData
 }: LeagueSelectorProps) {
   const [showAddUser, setShowAddUser] = useState(false);
   const [newUserName, setNewUserName] = useState('');
@@ -143,6 +145,23 @@ export default function LeagueSelector({
             avatar: userProf?.avatar || '👤'
           };
         })
+    : [];
+
+  const enrichedMembers = currentLeague
+    ? currentLeague.members.map(memberId => {
+        const userProf = allUsers.find(u => u.id === memberId);
+        const mData = leagueMembersData?.find(m => m.userId === memberId);
+        return {
+          id: memberId,
+          name: userProf?.name || `Participante (${memberId.substring(0, 5)})`,
+          avatar: userProf?.avatar || '👤',
+          paid: mData?.paid || false,
+          balance: mData?.balance || 0,
+          paymentStatus: mData?.paymentStatus || 'unpaid',
+          paymentCode: mData?.paymentCode,
+          isCreator: currentLeague.creatorId === memberId
+        };
+      })
     : [];
 
   return (
@@ -393,100 +412,152 @@ export default function LeagueSelector({
       {/* Sección de Pagos y Saldo de la Liga */}
       {currentLeague && (
         <div className="border-t border-slate-100 pt-6 space-y-4">
-          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-4">
-            
-            {/* Si el usuario actual es el CREADOR de la liga, puede configurar o editar datos bancarios */}
-            {currentLeague.creatorId === currentUser.id ? (
-              <div className="space-y-4">
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-100 pb-3 select-none">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-650 shrink-0">
-                      <KeyRound className="w-4 h-4 text-indigo-600" />
+          <div className="flex flex-col space-y-1.5">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5 select-none">
+              <Users className="w-4 h-4 text-slate-400" />
+              Estado de Suscripciones en esta Liga:
+            </h4>
+            <p className="text-[10px] text-slate-400 font-semibold select-none">
+              Aquí puedes ver a cada integrante del grupo y su respectivo estado de pago. Las acciones de pago y abandono se activan solo en tu perfil actual.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4">
+            {enrichedMembers.map(member => {
+              const isActiveSimulated = member.id === currentUser.id;
+              return (
+                <div 
+                  key={member.id} 
+                  className={`bg-white border rounded-2xl p-5 shadow-xs transition-all ${
+                    isActiveSimulated 
+                      ? 'border-indigo-300 ring-4 ring-indigo-500/5 bg-indigo-50/5' 
+                      : 'border-slate-150 hover:border-slate-200'
+                  }`}
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-slate-50 border border-slate-150 rounded-xl flex items-center justify-center text-xl select-none shrink-0">
+                        {member.avatar}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-black text-slate-800 font-sans">{member.name}</span>
+                          {isActiveSimulated && (
+                            <span className="px-1.5 py-0.5 bg-indigo-100 border border-indigo-200 text-indigo-800 text-[8px] font-black uppercase rounded tracking-wider select-none">
+                              Tú (Activo)
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-[9px] text-slate-400 font-bold block uppercase tracking-wider mt-0.5 select-none">
+                          {member.isCreator ? '👑 Organizador' : '⚽ Integrante'}
+                        </span>
+                      </div>
                     </div>
-                    <div>
-                      <h4 className="font-bold text-slate-800 text-sm font-sans">
-                        Eres el Creador y Administrador de este Grupo
-                      </h4>
-                      <p className="text-[10px] text-slate-500 font-medium">
-                        Configura o edita los datos bancarios donde los miembros te transferirán el dinero de la inscripción.
-                      </p>
+
+                    {/* Estado del miembro en la liga */}
+                    <div className="select-none shrink-0">
+                      {member.isCreator ? (
+                        <span className="px-2.5 py-1 bg-indigo-50 border border-indigo-100 text-indigo-700 text-[9px] font-black uppercase rounded-lg tracking-wider">
+                          👑 Organizador de la Liga
+                        </span>
+                      ) : member.paid ? (
+                        <div className="text-left sm:text-right space-y-0.5">
+                          <span className="px-2.5 py-1 bg-emerald-50 border border-emerald-100 text-emerald-700 text-[9px] font-black uppercase rounded-lg tracking-wider inline-block">
+                            ✓ Activo y Pagado
+                          </span>
+                          <span className="text-[9px] text-emerald-600 font-mono font-bold block">
+                            Saldo: ${member.balance || 0}.00 USD
+                          </span>
+                        </div>
+                      ) : member.paymentStatus === 'pending' ? (
+                        <span className="px-2.5 py-1 bg-amber-50 border border-amber-100 text-amber-700 text-[9px] font-black uppercase rounded-lg tracking-wider inline-block animate-pulse">
+                          ⏳ Verificación Pendiente
+                        </span>
+                      ) : member.paymentStatus === 'rejected' ? (
+                        <span className="px-2.5 py-1 bg-rose-50 border border-rose-100 text-rose-700 text-[9px] font-black uppercase rounded-lg tracking-wider inline-block" title={`Ref: ${member.paymentCode || 'N/A'}`}>
+                          ❌ Rechazado / Impago
+                        </span>
+                      ) : (
+                        <span className="px-2.5 py-1 bg-rose-50 border border-rose-100 text-rose-700 text-[9px] font-black uppercase rounded-lg tracking-wider inline-block">
+                          ⚠️ Falta de Pago
+                        </span>
+                      )}
                     </div>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={handleCreatorLeaveClick}
-                    className="px-4 py-2 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 font-bold text-xs rounded-xl transition-all cursor-pointer select-none shrink-0"
-                  >
-                    Abandonar Liga
-                  </button>
-                </div>
-                
-                {onSavePaymentSettings && (
-                  <LeaguePaymentSettings
-                    league={currentLeague}
-                    onSaveSettings={onSavePaymentSettings}
-                  />
-                )}
-              </div>
-            ) : (
-              /* Si el usuario actual es un MIEMBRO (no creador), ve su saldo y paga si es necesario */
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <div className="space-y-1">
-                  <span className="text-[10px] uppercase font-black text-indigo-700 tracking-wider block select-none">
-                    Tu Cuenta en esta Liga
-                  </span>
-                  <div className="flex items-center gap-2.5">
-                    <span className="text-sm font-bold text-slate-900 font-sans">{currentUser.name}</span>
-                    {memberInfo?.paid ? (
-                      <span className="px-2 py-0.5 bg-emerald-100 border border-emerald-200 text-emerald-800 text-[9px] font-black uppercase rounded-md tracking-wider flex items-center gap-1">
-                        ✓ Activo y Pagado
-                      </span>
-                    ) : memberInfo?.paymentStatus === 'pending' ? (
-                      <span className="px-2 py-0.5 bg-amber-100 border border-amber-200 text-amber-800 text-[9px] font-black uppercase rounded-md tracking-wider animate-pulse">
-                        ⏳ Verificación Pendiente
-                      </span>
-                    ) : (
-                      <span className="px-2 py-0.5 bg-rose-100 border border-rose-250 border-rose-200 text-rose-800 text-[9px] font-black uppercase rounded-md tracking-wider">
-                        ⚠️ Pendiente de Pago
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-[10px] text-slate-505 text-slate-500 font-semibold">
-                    Saldo Apostado Acreditado: <strong className="text-emerald-600 font-mono text-xs">${memberInfo?.balance || 0}.00 USD</strong>
-                  </div>
-                </div>
+                  {/* Acciones exclusivas del perfil simulado activo */}
+                  {isActiveSimulated && (
+                    <div className="mt-4 pt-4 border-t border-slate-100 bg-slate-50/50 rounded-xl p-4 space-y-4">
+                      
+                      {member.isCreator ? (
+                        <div className="space-y-4">
+                          {onSavePaymentSettings && (
+                            <LeaguePaymentSettings
+                              league={currentLeague}
+                              onSaveSettings={onSavePaymentSettings}
+                            />
+                          )}
+                          <div className="flex justify-end select-none">
+                            <button
+                              type="button"
+                              onClick={handleCreatorLeaveClick}
+                              className="px-4 py-2 bg-rose-50 hover:bg-rose-105 hover:bg-rose-100 border border-rose-200 text-rose-700 font-bold text-xs rounded-xl transition-all cursor-pointer shadow-2xs"
+                            >
+                              Abandonar Liga
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                          <div className="select-none">
+                            <span className="text-[10px] text-slate-500 font-bold block">
+                              {member.paid 
+                                ? '¡Excelente! Tu participación en esta liga está activa y completamente pagada.' 
+                                : member.paymentStatus === 'pending'
+                                ? 'El organizador tiene tu comprobante en su bandeja de verificación.'
+                                : 'Tu cuenta se encuentra pendiente de suscripción.'}
+                            </span>
+                            {!member.paid && member.paymentStatus !== 'pending' && currentLeague.bankConfig && (
+                              <span className="text-[9px] text-indigo-650 font-black block mt-0.5 uppercase tracking-wider">
+                                👉 Banco Destino: {currentLeague.bankConfig.bankName} (Cta: {currentLeague.bankConfig.accountNumber})
+                              </span>
+                            )}
+                          </div>
 
-                <div className="flex flex-wrap gap-2 w-full sm:w-auto shrink-0 select-none">
-                  {/* Botón para abrir el escáner de pagos si está impago */}
-                  {(!memberInfo?.paid || memberInfo?.paymentStatus === 'rejected') && (
-                    <button
-                      onClick={() => setShowScanner(true)}
-                      className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer select-none"
-                    >
-                      💸 Pagar Inscripción / Cargar Saldo
-                    </button>
+                          <div className="flex gap-2 w-full sm:w-auto justify-end select-none shrink-0">
+                            {(!member.paid || member.paymentStatus === 'rejected') && (
+                              <button
+                                type="button"
+                                onClick={() => setShowScanner(true)}
+                                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer"
+                              >
+                                💸 Pagar Inscripción / Cargar Saldo
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                const msg = member.paid 
+                                  ? '¿Seguro que deseas abandonar esta liga? Perderás tu saldo acreditado y todas tus apuestas registradas en este grupo.'
+                                  : '¿Seguro que deseas salir de esta liga de amigos?';
+                                if (window.confirm(msg)) {
+                                  if (onLeaveLeague) {
+                                    await onLeaveLeague(currentLeague.code);
+                                  }
+                                }
+                              }}
+                              className="px-4 py-2 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 font-bold text-xs rounded-xl transition-all cursor-pointer"
+                            >
+                              Abandonar Liga
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   )}
-
-                  {/* Botón para abandonar la liga */}
-                  <button
-                    onClick={async () => {
-                      const msg = memberInfo?.paid 
-                        ? '¿Seguro que deseas abandonar esta liga? Perderás tu saldo acreditado y todas tus apuestas registradas en este grupo.'
-                        : '¿Seguro que deseas salir de esta liga de amigos?';
-                      if (window.confirm(msg)) {
-                        if (onLeaveLeague) {
-                          await onLeaveLeague(currentLeague.code);
-                        }
-                      }
-                    }}
-                    className="px-4 py-2 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 font-bold text-xs rounded-xl transition-all cursor-pointer select-none"
-                  >
-                    Abandonar Liga
-                  </button>
                 </div>
-              </div>
-            )}
+              );
+            })}
           </div>
 
           {/* Modal del Escáner de Comprobante OCR */}

@@ -45,6 +45,7 @@ export default function App() {
   const [forecasts, setForecasts] = useState<Forecast[]>([]);
   const [leaguesMembersMap, setLeaguesMembersMap] = useState<Record<string, string[]>>({});
   const [currentMemberInfo, setCurrentMemberInfo] = useState<LeagueMemberInfo | null>(null);
+  const [currentLeagueMembersData, setCurrentLeagueMembersData] = useState<LeagueMemberInfo[]>([]);
   const [pendingPayments, setPendingPayments] = useState<LeagueMemberInfo[]>([]);
 
   // ── 1. Auth listener ──────────────────────────────────────
@@ -322,6 +323,33 @@ export default function App() {
     }, (err) => console.error('Active member info sync offline:', err));
     return () => unsubscribe();
   }, [currentUser, currentLeague]);
+
+  // ── 7.5 All members payment data sync ───────────────────────
+  useEffect(() => {
+    if (!currentLeague) {
+      setCurrentLeagueMembersData([]);
+      return;
+    }
+    const unsubscribe = onSnapshot(collection(db, 'leagues', currentLeague.code, 'members'), (snapshot) => {
+      const data: LeagueMemberInfo[] = [];
+      snapshot.forEach(docSnap => {
+        const d = docSnap.data();
+        data.push({
+          userId: docSnap.id,
+          leagueCode: currentLeague.code,
+          joinedAt: d.joinedAt || '',
+          paid: d.paid || false,
+          balance: d.balance || 0,
+          paymentStatus: d.paymentStatus || 'unpaid',
+          paymentVoucherUrl: d.paymentVoucherUrl,
+          paymentVoucherAmount: d.paymentVoucherAmount,
+          paymentCode: d.paymentCode
+        });
+      });
+      setCurrentLeagueMembersData(data);
+    }, (err) => console.error('League members data sync offline:', err));
+    return () => unsubscribe();
+  }, [currentLeague]);
 
   // ── 8. Pending payments for the creator ──────────────────────
   useEffect(() => {
@@ -765,7 +793,7 @@ export default function App() {
         <div className="space-y-8">
           {activeTab === 'calendar' && <MatchesList matches={matches} forecasts={forecasts} currentUser={currentUser} allUsers={users} onSaveForecast={handleSaveForecast} onUpdateMatchResult={handleUpdateMatchResult} />}
           {activeTab === 'leaderboard' && <Leaderboard stats={currentStats} currentUser={currentUser} matches={matches} forecasts={forecasts} users={users} currentLeague={enrichedCurrentLeague} />}
-          {activeTab === 'leagues' && <LeagueSelector currentUser={currentUser} allUsers={users} currentLeague={enrichedCurrentLeague} allLeagues={enrichedLeagues} onSelectUser={handleSelectSimulatedProfile} onSelectLeague={l => setCurrentLeague(l)} onAddUser={handleAddUser} onAddLeague={handleAddLeague} onJoinLeague={handleJoinLeague} onSavePaymentSettings={handleSavePaymentSettings} onSubmitVoucher={handleSubmitVoucher} memberInfo={currentMemberInfo || undefined} onLeaveLeague={handleLeaveLeague} />}
+          {activeTab === 'leagues' && <LeagueSelector currentUser={currentUser} allUsers={users} currentLeague={enrichedCurrentLeague} allLeagues={enrichedLeagues} onSelectUser={handleSelectSimulatedProfile} onSelectLeague={l => setCurrentLeague(l)} onAddUser={handleAddUser} onAddLeague={handleAddLeague} onJoinLeague={handleJoinLeague} onSavePaymentSettings={handleSavePaymentSettings} onSubmitVoucher={handleSubmitVoucher} memberInfo={currentMemberInfo || undefined} onLeaveLeague={handleLeaveLeague} leagueMembersData={currentLeagueMembersData} />}
           {activeTab === 'sandbox' && <InteractiveSandbox />}
           {activeTab === 'admin' && currentUser?.isAdmin && (
             <AdminPanel
