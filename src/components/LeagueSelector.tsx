@@ -209,7 +209,7 @@ export default function LeagueSelector({
           </div>
           <div>
             <h3 className="text-lg font-bold text-slate-900 font-sans">
-              {currentLeague ? currentLeague.name : 'Todas las Ligas / Global'}
+              {currentLeague ? currentLeague.name : '⚠️ No tienes ligas'}
             </h3>
             <p className="text-xs text-slate-500 mt-0.5">
               {currentLeague ? (
@@ -218,7 +218,7 @@ export default function LeagueSelector({
                   <span className="text-[10px] text-slate-400">({currentLeague.members.length} miembros)</span>
                 </span>
               ) : (
-                'Filtro de clasificación activa'
+                'Crea o únete a una liga para comenzar a participar'
               )}
             </p>
           </div>
@@ -392,39 +392,32 @@ export default function LeagueSelector({
             </form>
           )}
 
-          <div className="flex flex-wrap gap-2">
-            <button
-              id="select-league-global"
-              onClick={() => onSelectLeague(null)}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-semibold transition-all ${
-                currentLeague === null
-                  ? 'bg-indigo-600 border-indigo-600 text-white shadow-xs'
-                  : 'bg-white border-slate-150 text-slate-700 hover:bg-slate-50'
-              }`}
-            >
-              <span>🌍</span>
-              <span>Global</span>
-            </button>
-            
-            {visibleLeagues.map((league) => {
-              const isSelected = currentLeague?.code === league.code;
-              return (
-                <button
-                  key={league.code}
-                  id={`select-league-${league.code}`}
-                  onClick={() => onSelectLeague(league)}
-                  className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-semibold transition-all ${
-                    isSelected
-                      ? 'bg-indigo-600 border-indigo-600 text-white shadow-xs'
-                      : 'bg-white border-slate-150 text-slate-700 hover:bg-slate-50'
-                  }`}
-                >
-                  <span>⚽</span>
-                  <span>{league.name}</span>
-                  <span className="text-[10px] opacity-75">({league.code})</span>
-                </button>
-              );
-            })}
+          <div className="flex flex-wrap gap-2 w-full">
+            {visibleLeagues.length === 0 ? (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-amber-800 text-xs font-semibold text-center select-none w-full max-w-md mx-auto">
+                ⚠️ No estás registrado en ninguna liga. Crea una nueva liga o únete a una existente para comenzar a ingresar pronósticos.
+              </div>
+            ) : (
+              visibleLeagues.map((league) => {
+                const isSelected = currentLeague?.code === league.code;
+                return (
+                  <button
+                    key={league.code}
+                    id={`select-league-${league.code}`}
+                    onClick={() => onSelectLeague(league)}
+                    className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-semibold transition-all ${
+                      isSelected
+                        ? 'bg-indigo-600 border-indigo-600 text-white shadow-xs'
+                        : 'bg-white border-slate-150 text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span>⚽</span>
+                    <span>{league.name}</span>
+                    <span className="text-[10px] opacity-75">({league.code})</span>
+                  </button>
+                );
+              })
+            )}
           </div>
         </div>
       </div>
@@ -435,7 +428,7 @@ export default function LeagueSelector({
           <div className="flex flex-col space-y-1.5 animate-fadeIn">
             <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5 select-none">
               <Trophy className="w-4 h-4 text-indigo-500" />
-              Panel de Administración de Ligas (Global):
+              Panel de Administración de Todas las Ligas:
             </h4>
             <p className="text-[10px] text-slate-400 font-semibold select-none">
               Como administrador, aquí puedes monitorear todas las ligas del sistema, ver sus configuraciones y seleccionar una para auditar sus integrantes.

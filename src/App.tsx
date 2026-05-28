@@ -40,13 +40,22 @@ export default function App() {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [leagues, setLeagues] = useState<League[]>([]);
-  const [currentLeague, setCurrentLeague] = useState<League | null>(null);
+  const [currentLeague, setCurrentLeague] = useState<League | null>(() => {
+    try {
+      const saved = localStorage.getItem('selected_league_info');
+      return saved ? JSON.parse(saved) : null;
+    } catch (_) {
+      return null;
+    }
+  });
   const [matches, setMatches] = useState<Match[]>([]);
   const [forecasts, setForecasts] = useState<Forecast[]>([]);
   const [leaguesMembersMap, setLeaguesMembersMap] = useState<Record<string, string[]>>({});
   const [currentMemberInfo, setCurrentMemberInfo] = useState<LeagueMemberInfo | null>(null);
   const [currentLeagueMembersData, setCurrentLeagueMembersData] = useState<LeagueMemberInfo[]>([]);
   const [pendingPayments, setPendingPayments] = useState<LeagueMemberInfo[]>([]);
+
+  const enrichedLeagues = leagues.map(l => ({ ...l, members: leaguesMembersMap[l.code] || [] }));
 
   // ── 1. Auth listener ──────────────────────────────────────
   useEffect(() => {
@@ -380,6 +389,40 @@ export default function App() {
     return () => unsubscribe();
   }, [currentUser, currentLeague]);
 
+  // Sync selected league to localStorage
+  useEffect(() => {
+    try {
+      if (currentLeague) {
+        localStorage.setItem('selected_league_info', JSON.stringify(currentLeague));
+      } else {
+        localStorage.removeItem('selected_league_info');
+      }
+    } catch (_) {}
+  }, [currentLeague]);
+
+  // Auto-select the first joined league if none is selected
+  useEffect(() => {
+    if (!currentUser || currentLeague) return;
+    if (enrichedLeagues.length === 0) return;
+    
+    const myLeagues = enrichedLeagues.filter(l => (l.members || []).includes(currentUser.id));
+    if (myLeagues.length > 0) {
+      try {
+        const saved = localStorage.getItem('selected_league_info');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          const found = myLeagues.find(l => l.code === parsed.code);
+          if (found) {
+            setCurrentLeague(found);
+            return;
+          }
+        }
+      } catch (_) {}
+      
+      setCurrentLeague(myLeagues[0]);
+    }
+  }, [currentUser, enrichedLeagues, currentLeague]);
+
   // ── Event handlers ────────────────────────────────────────
   const handleSelectSimulatedProfile = (profile: UserProfile) => setCurrentUser(profile);
 
@@ -633,7 +676,6 @@ export default function App() {
     }).sort((a, b) => b.totalPoints - a.totalPoints || b.exactMatchesCount - a.exactMatchesCount || b.trendMatchesCount - a.trendMatchesCount);
   };
 
-  const enrichedLeagues = leagues.map(l => ({ ...l, members: leaguesMembersMap[l.code] || [] }));
   const latestLeagueData = currentLeague ? leagues.find(l => l.code === currentLeague.code) : null;
   const enrichedCurrentLeague = latestLeagueData 
     ? { ...latestLeagueData, members: leaguesMembersMap[latestLeagueData.code] || [] } 
@@ -767,8 +809,8 @@ export default function App() {
                   )}
                 </div>
                 <span className="text-xs text-indigo-200 mt-0.5 block">
-                  Jugando en: <strong className="text-white underline">
-                    {enrichedCurrentLeague ? enrichedCurrentLeague.name : 'Clasificación Global 🌍'}
+                  Jugando en: <strong className="text-white underline animate-pulse">
+                    {enrichedCurrentLeague ? enrichedCurrentLeague.name : '⚠️ Sin Liga Activa'}
                   </strong>
                 </span>
               </div>
@@ -805,8 +847,52 @@ export default function App() {
       {/* Main */}
       <main className="grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
         <div className="space-y-8">
-          {activeTab === 'calendar' && <MatchesList matches={matches} forecasts={forecasts} currentUser={currentUser} allUsers={users} onSaveForecast={handleSaveForecast} onUpdateMatchResult={handleUpdateMatchResult} />}
-          {activeTab === 'leaderboard' && <Leaderboard stats={currentStats} currentUser={currentUser} matches={matches} forecasts={forecasts} users={users} currentLeague={enrichedCurrentLeague} />}
+          {activeTab === 'calendar' && (
+            currentLeague ? (
+              <MatchesList matches={matches} forecasts={forecasts} currentUser={currentUser} allUsers={users} onSaveForecast={handleSaveForecast} onUpdateMatchResult={handleUpdateMatchResult} />
+            ) : (
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-8 text-center max-w-xl mx-auto space-y-4 my-8 animate-fadeIn">
+                <div className="w-16 h-16 bg-amber-50 border border-amber-200 text-amber-500 rounded-2xl flex items-center justify-center mx-auto text-3xl select-none animate-bounce">
+                  ⚠️
+                </div>
+                <h2 className="text-xl font-bold text-slate-800 font-sans">No tienes ligas activas</h2>
+                <p className="text-xs text-slate-500 leading-relaxed font-sans max-w-md mx-auto">
+                  Para poder registrar tus pronósticos y competir con tus amigos, necesitas ser miembro de al menos una liga activa.
+                </p>
+                <div className="pt-2">
+                  <button
+                    onClick={() => setActiveTab('leagues')}
+                    className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-md hover:shadow-lg cursor-pointer"
+                  >
+                    Ir a Mi Cuenta / Ligas
+                  </button>
+                </div>
+              </div>
+            )
+          )}
+          {activeTab === 'leaderboard' && (
+            currentLeague ? (
+              <Leaderboard stats={currentStats} currentUser={currentUser} matches={matches} forecasts={forecasts} users={users} currentLeague={enrichedCurrentLeague} />
+            ) : (
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-8 text-center max-w-xl mx-auto space-y-4 my-8 animate-fadeIn">
+                <div className="w-16 h-16 bg-amber-50 border border-amber-200 text-amber-500 rounded-2xl flex items-center justify-center mx-auto text-3xl select-none animate-bounce">
+                  ⚠️
+                </div>
+                <h2 className="text-xl font-bold text-slate-800 font-sans">No tienes ligas activas</h2>
+                <p className="text-xs text-slate-500 leading-relaxed font-sans max-w-md mx-auto">
+                  Para poder visualizar la tabla de posiciones y la distribución del pozo de premios, necesitas pertenecer a una liga.
+                </p>
+                <div className="pt-2">
+                  <button
+                    onClick={() => setActiveTab('leagues')}
+                    className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-md hover:shadow-lg cursor-pointer"
+                  >
+                    Ir a Mi Cuenta / Ligas
+                  </button>
+                </div>
+              </div>
+            )
+          )}
           {activeTab === 'leagues' && (
             <LeagueSelector
               currentUser={currentUser}
