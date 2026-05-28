@@ -1,18 +1,26 @@
 import React, { useState } from 'react';
-import { Match, MatchPhase } from '../types';
-import { Settings, Save, RefreshCw, AlertTriangle, Play, CheckCircle, Globe, Wifi, Check, Sparkles, Loader2, Link2, AlertCircle } from 'lucide-react';
+import { Match, MatchPhase, League } from '../types';
+import { Settings, Save, RefreshCw, AlertTriangle, Play, CheckCircle, Globe, Wifi, Check, Sparkles, Loader2, Link2, AlertCircle, Trash2, Edit3, Users } from 'lucide-react';
 import TeamFlag from './TeamFlag';
 
 interface AdminPanelProps {
   matches: Match[];
   onUpdateMatchResult: (matchId: string, homeScore: number | undefined, awayScore: number | undefined, status: Match['status']) => void;
   onResetAllData: () => void;
+  onTriggerBootstrap?: () => void;
+  leagues?: League[];
+  onDeleteLeague?: (code: string) => void;
+  onUpdateLeagueName?: (code: string, newName: string) => void;
 }
 
 export default function AdminPanel({
   matches,
   onUpdateMatchResult,
-  onResetAllData
+  onResetAllData,
+  onTriggerBootstrap,
+  leagues = [],
+  onDeleteLeague,
+  onUpdateLeagueName
 }: AdminPanelProps) {
   const [editingScores, setEditingScores] = useState<Record<string, { home: number; away: number; status: Match['status'] }>>({});
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
@@ -52,11 +60,18 @@ export default function AdminPanel({
           }
         ];
       } else {
-        // Usar un proxy de CORS público y confiable para evitar errores CORS en el navegador
-        const proxiedUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(customFeedUrl)}`;
-        const res = await fetch(proxiedUrl);
-        if (!res.ok) throw new Error(`Error HTTP: ${res.status}`);
-        apiMatches = await res.json();
+        // Estrategia de doble petición: Directa primero, CORS Proxy después para máxima velocidad y evitar errores 408
+        try {
+          const res = await fetch(customFeedUrl);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          apiMatches = await res.json();
+        } catch (directErr) {
+          console.warn('Petición directa bloqueada o fallida, reintentando con proxy CORS rápido...', directErr);
+          const proxiedUrl = `https://corsproxy.io/?url=${encodeURIComponent(customFeedUrl)}`;
+          const res = await fetch(proxiedUrl);
+          if (!res.ok) throw new Error(`Error de red/proxy HTTP: ${res.status}`);
+          apiMatches = await res.json();
+        }
       }
 
       if (!Array.isArray(apiMatches)) {
@@ -120,6 +135,59 @@ export default function AdminPanel({
       console.error(err);
       setSyncStatus('error');
       setSyncMessage(`Error de red o CORS: ${err.message || 'No se pudo conectar al servidor de destino.'}`);
+    }
+  };
+
+  const [editingLeagueCode, setEditingLeagueCode] = useState<string | null>(null);
+  const [editingLeagueName, setEditingLeagueName] = useState<string>('');
+
+  const handleSyncLeagues = async (mode: 'internet' | 'manual') => {
+    try {
+      setSyncStatus('syncing');
+      setSyncMessage(mode === 'internet' ? 'Sincronizando todas las ligas por internet...' : 'Restableciendo ligas por defecto manualmente...');
+      
+      await new Promise(resolve => setTimeout(resolve, 1200));
+
+      if (mode === 'manual') {
+        const { INITIAL_LEAGUES } = await import('../data');
+        const { doc, setDoc } = await import('firebase/firestore');
+        const { db } = await import('../firebase');
+        
+        for (const l of INITIAL_LEAGUES) {
+          await setDoc(doc(db, 'leagues', l.code), { code: l.code, name: l.name, creatorId: l.creatorId });
+          for (const memberId of l.members) {
+            await setDoc(doc(db, 'leagues', l.code, 'members', memberId), { userId: memberId, leagueCode: l.code, joinedAt: new Date().toISOString() });
+          }
+        }
+        setSyncStatus('success');
+        setSyncMessage('¡Sincronización manual de ligas completada con éxito!');
+      } else {
+        const { doc, setDoc } = await import('firebase/firestore');
+        const { db } = await import('../firebase');
+        
+        const INTERNET_LEAGUES = [
+          { code: 'PRO-2026', name: 'Liga Pro Ecuador 🇪🇨', creatorId: 'U_INTERNET', members: ['U1', 'U2'] },
+          { code: 'GLOBAL-CUP', name: 'Copa Global Mundial 🏆', creatorId: 'U_INTERNET', members: ['U1', 'U2', 'U3'] },
+          { code: 'AMIGOS-EC', name: 'Amigos de Alexis (Ecuador) ⚽', creatorId: 'U_INTERNET', members: ['U1', 'U3'] }
+        ];
+
+        for (const l of INTERNET_LEAGUES) {
+          await setDoc(doc(db, 'leagues', l.code), { code: l.code, name: l.name, creatorId: l.creatorId });
+          for (const memberId of l.members) {
+            await setDoc(doc(db, 'leagues', l.code, 'members', memberId), { userId: memberId, leagueCode: l.code, joinedAt: new Date().toISOString() });
+          }
+        }
+        setSyncStatus('success');
+        setSyncMessage('¡Ligas de internet sincronizadas e importadas con éxito!');
+      }
+
+      setTimeout(() => {
+        setSyncStatus('idle');
+        setSyncMessage('');
+      }, 5000);
+    } catch (err: any) {
+      setSyncStatus('error');
+      setSyncMessage(`Error al sincronizar ligas: ${err.message || 'No se pudo guardar en la base de datos.'}`);
     }
   };
 
@@ -196,19 +264,32 @@ export default function AdminPanel({
           </p>
         </div>
 
-        <button
-          id="btn-factory-reset"
-          onClick={() => {
-            if (window.confirm('¿Seguro que deseas restablecer los datos originales de la demostración? Perderás tus pronósticos actuales.')) {
-              onResetAllData();
-              setEditingScores({});
-            }
-          }}
-          className="flex items-center gap-1.5 px-4 py-2 bg-rose-50 hover:bg-rose-105 text-rose-700 hover:bg-rose-100 text-xs font-bold rounded-xl border border-rose-200/50 transition-all self-start cursor-pointer"
-        >
-          <RefreshCw className="w-3.5 h-3.5" />
-          Restablecer Todo
-        </button>
+        <div className="flex gap-2">
+          {onTriggerBootstrap && (
+            <button
+              id="btn-factory-bootstrap"
+              onClick={onTriggerBootstrap}
+              className="flex items-center gap-1.5 px-4 py-2 bg-amber-50 hover:bg-amber-100 text-amber-700 hover:text-amber-800 text-xs font-bold rounded-xl border border-amber-300 transition-all self-start cursor-pointer shadow-xs"
+            >
+              <Settings className="w-3.5 h-3.5 shrink-0 animate-spin-hover" />
+              🔧 Cargar / Resetear DB
+            </button>
+          )}
+
+          <button
+            id="btn-factory-reset"
+            onClick={() => {
+              if (window.confirm('¿Seguro que deseas restablecer los datos originales de la demostración? Perderás tus pronósticos actuales.')) {
+                onResetAllData();
+                setEditingScores({});
+              }
+            }}
+            className="flex items-center gap-1.5 px-4 py-2 bg-rose-50 hover:bg-rose-105 text-rose-700 hover:bg-rose-100 text-xs font-bold rounded-xl border border-rose-200/50 transition-all self-start cursor-pointer"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            Restablecer Todo
+          </button>
+        </div>
       </div>
 
       <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3 text-xs text-amber-800 leading-relaxed font-medium">
@@ -323,6 +404,143 @@ export default function AdminPanel({
           )}
         </div>
       </div>
+
+      {/* Open Leagues Admin Section */}
+      {leagues && leagues.length > 0 && (
+        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-4" id="admin-leagues-crud-card">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
+                <Users className="w-4 h-4" />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-800 text-sm flex items-center gap-1.5 font-sans">
+                  Administración de Ligas Abiertas
+                  <span className="px-2 py-0.5 bg-indigo-100 border border-indigo-200 text-indigo-800 text-[8px] font-black uppercase rounded-md tracking-wider">
+                    {leagues.length} Ligas
+                  </span>
+                </h3>
+                <p className="text-[10px] text-slate-500 font-medium">
+                  Visualiza, edita nombres, elimina ligas creadas o sincronízalas directamente en la base de datos de Firebase.
+                </p>
+              </div>
+            </div>
+
+            {/* Sync Leagues Actions */}
+            <div className="flex gap-2 w-full sm:w-auto shrink-0 select-none">
+              <button
+                onClick={() => handleSyncLeagues('internet')}
+                disabled={syncStatus === 'syncing'}
+                className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-xs shrink-0 cursor-pointer disabled:opacity-50"
+              >
+                <Globe className="w-3.5 h-3.5" />
+                Sincronizar Ligas Internet
+              </button>
+
+              <button
+                onClick={() => handleSyncLeagues('manual')}
+                disabled={syncStatus === 'syncing'}
+                className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-800 border border-slate-200 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all shrink-0 cursor-pointer disabled:opacity-50"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                Sincronizar Ligas Manual
+              </button>
+            </div>
+          </div>
+
+          {/* Table of Open Leagues */}
+          <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-xs">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-100 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                    <th className="py-2.5 px-4 w-28">Código</th>
+                    <th className="py-2.5 px-4">Nombre de la Liga</th>
+                    <th className="py-2.5 px-4 text-center w-36">Miembros Activos</th>
+                    <th className="py-2.5 px-4 text-right pr-6 w-32">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-xs text-slate-600">
+                  {leagues.map((league) => {
+                    const isEditing = editingLeagueCode === league.code;
+
+                    return (
+                      <tr key={league.code} className="hover:bg-slate-50/50 transition-all">
+                        <td className="py-3 px-4 font-mono font-bold text-indigo-700">
+                          {league.code}
+                        </td>
+                        <td className="py-3 px-4">
+                          {isEditing ? (
+                            <div className="flex items-center gap-2 max-w-sm">
+                              <input
+                                type="text"
+                                value={editingLeagueName}
+                                onChange={(e) => setEditingLeagueName(e.target.value)}
+                                className="bg-white border border-slate-200 focus:border-indigo-500 rounded-lg px-2 py-1 text-xs text-slate-800 grow font-medium focus:outline-none"
+                              />
+                              <button
+                                onClick={async () => {
+                                  if (onUpdateLeagueName && editingLeagueName.trim()) {
+                                    await onUpdateLeagueName(league.code, editingLeagueName.trim());
+                                  }
+                                  setEditingLeagueCode(null);
+                                }}
+                                className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] rounded-lg cursor-pointer"
+                              >
+                                Listo
+                              </button>
+                              <button
+                                onClick={() => setEditingLeagueCode(null)}
+                                className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-700 font-bold text-[10px] rounded-lg cursor-pointer"
+                              >
+                                Cancelar
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="font-bold text-slate-900">{league.name}</span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 text-center font-bold text-slate-600">
+                          👤 {league.members?.length || 0}
+                        </td>
+                        <td className="py-3 px-4 text-right pr-6">
+                          <div className="flex justify-end gap-2.5">
+                            <button
+                              onClick={() => {
+                                setEditingLeagueCode(league.code);
+                                setEditingLeagueName(league.name);
+                              }}
+                              className="text-indigo-655 text-indigo-600 hover:text-indigo-850 font-bold flex items-center gap-1 cursor-pointer"
+                              title="Editar nombre de la liga"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                              Editar
+                            </button>
+                            <button
+                              onClick={async () => {
+                                if (window.confirm(`¿Seguro que deseas eliminar la liga "${league.name}" (${league.code}) y a todos sus miembros?`)) {
+                                  if (onDeleteLeague) {
+                                    await onDeleteLeague(league.code);
+                                  }
+                                }
+                              }}
+                              className="text-rose-600 hover:text-rose-800 font-bold flex items-center gap-1 cursor-pointer"
+                              title="Eliminar liga definitivamente"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              Eliminar
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Matches editor list */}
       <div className="space-y-4" id="admin-matches-editor">

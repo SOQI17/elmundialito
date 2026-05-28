@@ -3,7 +3,7 @@ import { INITIAL_MATCHES, INITIAL_LEAGUES } from './data';
 import { Match, Forecast, UserProfile, League, UserStats } from './types';
 import { calculateScore } from './utils/scoring';
 
-import { collection, doc, setDoc, getDoc, onSnapshot, serverTimestamp, deleteDoc } from 'firebase/firestore';
+import { collection, doc, setDoc, getDoc, getDocs, onSnapshot, serverTimestamp, deleteDoc } from 'firebase/firestore';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { db, auth, handleFirestoreError, OperationType } from './firebase';
 
@@ -372,6 +372,30 @@ export default function App() {
     } catch (err) { handleFirestoreError(err, OperationType.DELETE, 'bulk-reset'); }
   };
 
+  const handleDeleteLeague = async (code: string) => {
+    try {
+      const membersRef = collection(db, 'leagues', code, 'members');
+      const membersSnap = await getDocs(membersRef);
+      for (const d of membersSnap.docs) {
+        await deleteDoc(doc(db, 'leagues', code, 'members', d.id));
+      }
+      await deleteDoc(doc(db, 'leagues', code));
+      if (currentLeague?.code === code) {
+        setCurrentLeague(null);
+      }
+    } catch (err) {
+      console.error('Error deleting league:', err);
+    }
+  };
+
+  const handleUpdateLeagueName = async (code: string, newName: string) => {
+    try {
+      await setDoc(doc(db, 'leagues', code), { name: newName }, { merge: true });
+    } catch (err) {
+      console.error('Error updating league name:', err);
+    }
+  };
+
   const handleLogout = async () => {
     try { await signOut(auth); setCurrentUser(null); } catch (err) { console.error(err); }
   };
@@ -546,7 +570,7 @@ export default function App() {
                   >
                     <Pencil className="w-3 h-3 text-indigo-200 group-hover:text-white" />
                   </button>
-                  {true && (
+                  {currentUser?.isAdmin && false && (
                     <button
                       onClick={() => setShowForceBootstrap(true)}
                       className="px-2 py-1 rounded-md bg-amber-500/20 hover:bg-amber-500/40 text-amber-300 text-[10px] font-bold transition-all cursor-pointer border border-amber-500/30"
@@ -598,7 +622,17 @@ export default function App() {
           {activeTab === 'leaderboard' && <Leaderboard stats={currentStats} currentUser={currentUser} matches={matches} forecasts={forecasts} users={users} currentLeague={enrichedCurrentLeague} />}
           {activeTab === 'leagues' && <LeagueSelector currentUser={currentUser} allUsers={users} currentLeague={enrichedCurrentLeague} allLeagues={enrichedLeagues} onSelectUser={handleSelectSimulatedProfile} onSelectLeague={l => setCurrentLeague(l)} onAddUser={handleAddUser} onAddLeague={handleAddLeague} onJoinLeague={handleJoinLeague} />}
           {activeTab === 'sandbox' && <InteractiveSandbox />}
-          {activeTab === 'admin' && currentUser?.isAdmin && <AdminPanel matches={matches} onUpdateMatchResult={handleUpdateMatchResult} onResetAllData={handleResetData} />}
+          {activeTab === 'admin' && currentUser?.isAdmin && (
+            <AdminPanel
+              matches={matches}
+              onUpdateMatchResult={handleUpdateMatchResult}
+              onResetAllData={handleResetData}
+              onTriggerBootstrap={() => setShowForceBootstrap(true)}
+              leagues={enrichedLeagues}
+              onDeleteLeague={handleDeleteLeague}
+              onUpdateLeagueName={handleUpdateLeagueName}
+            />
+          )}
         </div>
       </main>
 
