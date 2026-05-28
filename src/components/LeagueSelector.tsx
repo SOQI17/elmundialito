@@ -60,6 +60,7 @@ export default function LeagueSelector({
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [selectedNewCreatorId, setSelectedNewCreatorId] = useState('');
   const [transferring, setTransferring] = useState(false);
+  const [showExtraBankDetails, setShowExtraBankDetails] = useState(false);
 
   const handleCreatorLeaveClick = () => {
     if (!currentLeague) return;
@@ -518,9 +519,43 @@ export default function LeagueSelector({
                                 : 'Tu cuenta se encuentra pendiente de suscripción.'}
                             </span>
                             {!member.paid && member.paymentStatus !== 'pending' && currentLeague.bankConfig && (
-                              <span className="text-[9px] text-indigo-650 font-black block mt-0.5 uppercase tracking-wider">
-                                👉 Banco Destino: {currentLeague.bankConfig.bankName} (Cta: {currentLeague.bankConfig.accountNumber})
-                              </span>
+                              <div className="space-y-1.5 mt-1 select-none">
+                                <div className="flex items-center flex-wrap gap-x-2 gap-y-1">
+                                  <span className="text-[9px] text-indigo-650 font-black uppercase tracking-wider block">
+                                    👉 Banco Destino: {currentLeague.bankConfig.bankName} (Cta: {currentLeague.bankConfig.accountNumber})
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setShowExtraBankDetails(!showExtraBankDetails)}
+                                    className="text-[9px] text-indigo-600 hover:text-indigo-700 hover:underline font-extrabold cursor-pointer focus:outline-none shrink-0"
+                                  >
+                                    {showExtraBankDetails ? '(Ocultar datos ▴)' : '(Ver más datos ▾)'}
+                                  </button>
+                                </div>
+                                
+                                {showExtraBankDetails && (
+                                  <div className="bg-slate-100/70 border border-slate-200/80 rounded-xl p-3 text-[9.5px] text-slate-600 font-semibold space-y-1 animate-fadeIn max-w-sm">
+                                    <div className="flex justify-between border-b border-slate-200/60 pb-1">
+                                      <span>Titular de la Cuenta:</span>
+                                      <span className="text-slate-800 font-bold">{currentLeague.bankConfig.ownerName}</span>
+                                    </div>
+                                    <div className="flex justify-between border-b border-slate-200/60 pb-1">
+                                      <span>Cédula o RUC:</span>
+                                      <span className="text-slate-800 font-mono font-bold">{currentLeague.bankConfig.ownerId}</span>
+                                    </div>
+                                    <div className="flex justify-between border-b border-slate-200/60 pb-1">
+                                      <span>Tipo de Cuenta:</span>
+                                      <span className="text-slate-800 font-bold capitalize">{currentLeague.bankConfig.accountType}</span>
+                                    </div>
+                                    {currentLeague.bankConfig.ownerEmail && (
+                                      <div className="flex justify-between">
+                                        <span>Correo del Titular:</span>
+                                        <span className="text-slate-805 text-slate-800 font-bold">{currentLeague.bankConfig.ownerEmail}</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
                             )}
                           </div>
 
