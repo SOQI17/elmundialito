@@ -52,7 +52,9 @@ export default function AdminPanel({
           }
         ];
       } else {
-        const res = await fetch(customFeedUrl);
+        // Usar un proxy de CORS público y confiable para evitar errores CORS en el navegador
+        const proxiedUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(customFeedUrl)}`;
+        const res = await fetch(proxiedUrl);
         if (!res.ok) throw new Error(`Error HTTP: ${res.status}`);
         apiMatches = await res.json();
       }
@@ -123,17 +125,22 @@ export default function AdminPanel({
 
   const handleLocalScoreChange = (matchId: string, team: 'home' | 'away', value: string, currentMatch: Match) => {
     const numericVal = value === '' ? 0 : Math.max(0, parseInt(value, 10));
+    
+    // Si el estado actual es 'scheduled' (programado), al editar goles lo cambiamos automáticamente a 'finished' para evitar errores y simplificar la experiencia.
     const currentEdit = editingScores[matchId] || {
       home: currentMatch.homeScore !== undefined ? currentMatch.homeScore : 0,
       away: currentMatch.awayScore !== undefined ? currentMatch.awayScore : 0,
-      status: currentMatch.status
+      status: currentMatch.status === 'scheduled' ? 'finished' : currentMatch.status
     };
+
+    const nextStatus = currentEdit.status === 'scheduled' ? 'finished' : currentEdit.status;
 
     setEditingScores({
       ...editingScores,
       [matchId]: {
         ...currentEdit,
-        [team]: numericVal
+        [team]: numericVal,
+        status: nextStatus
       }
     });
   };
@@ -373,7 +380,6 @@ export default function AdminPanel({
                       type="number"
                       min="0"
                       value={homeScoreVal}
-                      disabled={statusVal === 'scheduled'}
                       onChange={(e) => handleLocalScoreChange(match.id, 'home', e.target.value, match)}
                       className="w-14 bg-white border border-slate-200 rounded-lg py-1.5 text-center font-mono font-bold text-slate-850 focus:outline-none focus:border-indigo-500 disabled:bg-slate-100 disabled:text-slate-400"
                     />
@@ -388,7 +394,6 @@ export default function AdminPanel({
                       type="number"
                       min="0"
                       value={awayScoreVal}
-                      disabled={statusVal === 'scheduled'}
                       onChange={(e) => handleLocalScoreChange(match.id, 'away', e.target.value, match)}
                       className="w-14 bg-white border border-slate-200 rounded-lg py-1.5 text-center font-mono font-bold text-slate-850 focus:outline-none focus:border-indigo-500 disabled:bg-slate-100 disabled:text-slate-400"
                     />
