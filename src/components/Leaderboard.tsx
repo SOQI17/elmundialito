@@ -25,16 +25,24 @@ export default function Leaderboard({
   const [activeDateFilter, setActiveDateFilter] = useState<string>('all');
   const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
 
+  const getLocalDateStr = (dateStr: string) => {
+    const d = new Date(dateStr);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   // Obtener fechas únicas del torneo
   const uniqueDates = React.useMemo(() => {
     if (!matches || matches.length === 0) return [];
-    const dates = matches.map(m => m.dateTime.split('T')[0]);
+    const dates = matches.map(m => getLocalDateStr(m.dateTime));
     return Array.from(new Set(dates)).sort();
   }, [matches]);
 
   // Obtener partidos jugados vs totales para una fecha
   const getDateStats = (dateStr: string) => {
-    const dayMatches = matches.filter(m => m.dateTime.startsWith(dateStr));
+    const dayMatches = matches.filter(m => getLocalDateStr(m.dateTime) === dateStr);
     const finished = dayMatches.filter(m => m.status === 'finished').length;
     return {
       total: dayMatches.length,
@@ -44,22 +52,22 @@ export default function Leaderboard({
 
   // Convertir string de fecha en etiqueta de día corta
   const getDayShortLabel = (dateStr: string) => {
-    const d = new Date(dateStr + 'T00:00:00Z');
-    const weekday = d.toLocaleDateString('es-ES', { weekday: 'short', timeZone: 'UTC' }).replace('.', '');
+    const [year, month, day] = dateStr.split('-').map(Number);
+    const d = new Date(year, month - 1, day);
+    const weekday = d.toLocaleDateString('es-ES', { weekday: 'short' }).replace('.', '');
     const capitalizedW = weekday.charAt(0).toUpperCase() + weekday.slice(1);
-    const dayNum = d.getUTCDate();
-    const monthName = d.toLocaleDateString('es-ES', { month: 'short', timeZone: 'UTC' });
-    return `${capitalizedW} ${dayNum} ${monthName}`;
+    const monthName = d.toLocaleDateString('es-ES', { month: 'short' }).replace('.', '');
+    return `${capitalizedW} ${day} ${monthName}`;
   };
 
   // Convertir string de fecha en etiqueta de cabecera larga
   const formatDateHeader = (dateStr: string) => {
-    const d = new Date(dateStr + 'T00:00:00Z');
-    const dayName = d.toLocaleDateString('es-ES', { weekday: 'long', timeZone: 'UTC' });
+    const [year, month, day] = dateStr.split('-').map(Number);
+    const d = new Date(year, month - 1, day);
+    const dayName = d.toLocaleDateString('es-ES', { weekday: 'long' });
     const capitalizedDay = dayName.charAt(0).toUpperCase() + dayName.slice(1);
-    const dayNum = d.getUTCDate();
-    const monthName = d.toLocaleDateString('es-ES', { month: 'short', timeZone: 'UTC' });
-    return `${capitalizedDay} ${dayNum} de ${monthName}`;
+    const monthName = d.toLocaleDateString('es-ES', { month: 'short' }).replace('.', '');
+    return `${capitalizedDay} ${day} de ${monthName}`;
   };
 
   // Función interna para calcular estadísticas de un grupo selecto de partidos
@@ -170,7 +178,7 @@ export default function Leaderboard({
     if (activeDateFilter === 'all') {
       return stats;
     }
-    const dayMatches = matches.filter(m => m.dateTime.startsWith(activeDateFilter));
+    const dayMatches = matches.filter(m => getLocalDateStr(m.dateTime) === activeDateFilter);
     return calculatePointsForMatches(dayMatches);
   }, [activeDateFilter, stats, matches, forecasts, users, currentLeague]);
 
@@ -484,7 +492,7 @@ export default function Leaderboard({
                               {(() => {
                                 const matchesToShow = activeDateFilter === 'all'
                                   ? matches.filter(m => m.status !== 'finished')
-                                  : matches.filter(m => m.status !== 'finished' && m.dateTime.startsWith(activeDateFilter));
+                                  : matches.filter(m => m.status !== 'finished' && getLocalDateStr(m.dateTime) === activeDateFilter);
 
                                 if (matchesToShow.length === 0) {
                                   return (

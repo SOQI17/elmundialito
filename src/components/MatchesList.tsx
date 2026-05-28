@@ -75,37 +75,51 @@ export default function MatchesList({
     return 'Faltan menos de 15min';
   };
 
+  const getLocalDateStr = (dateStr: string) => {
+    const d = new Date(dateStr);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   const formatMatchTime = (dateStr: string) => {
     const d = new Date(dateStr);
-    return d.toLocaleString('es-ES', {
-      month: 'short', day: 'numeric',
-      hour: '2-digit', minute: '2-digit',
-      timeZone: 'UTC'
-    }) + ' UTC';
+    const timeStr = d.toLocaleTimeString('es-ES', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    });
+    const datePart = d.toLocaleDateString('es-ES', {
+      month: 'short',
+      day: 'numeric'
+    }).replace('.', '');
+    return `${datePart}, ${timeStr}`;
   };
 
   const formatDateHeader = (dateStr: string) => {
-    const d = new Date(dateStr + 'T00:00:00Z');
-    const dayName = d.toLocaleDateString('es-ES', { weekday: 'long', timeZone: 'UTC' });
+    const [year, month, day] = dateStr.split('-').map(Number);
+    const d = new Date(year, month - 1, day);
+    const dayName = d.toLocaleDateString('es-ES', { weekday: 'long' });
     const capitalizedDay = dayName.charAt(0).toUpperCase() + dayName.slice(1);
-    const dayNum = d.getUTCDate();
-    const monthName = d.toLocaleDateString('es-ES', { month: 'short', timeZone: 'UTC' });
-    return `${capitalizedDay} ${dayNum} de ${monthName}`;
+    const monthName = d.toLocaleDateString('es-ES', { month: 'short' }).replace('.', '');
+    return `${capitalizedDay} ${day} de ${monthName}`;
   };
 
   const getDayShortLabel = (dateStr: string) => {
-    const d = new Date(dateStr + 'T00:00:00Z');
-    const weekday = d.toLocaleDateString('es-ES', { weekday: 'short', timeZone: 'UTC' }).replace('.', '');
+    const [year, month, day] = dateStr.split('-').map(Number);
+    const d = new Date(year, month - 1, day);
+    const weekday = d.toLocaleDateString('es-ES', { weekday: 'short' }).replace('.', '');
     const capitalizedW = weekday.charAt(0).toUpperCase() + weekday.slice(1);
-    return `${capitalizedW} ${d.getUTCDate()}`;
+    return `${capitalizedW} ${day}`;
   };
 
   const availableDatesInPhase = Array.from(
-    new Set(matches.filter(m => m.phase === activePhase).map(m => m.dateTime.split('T')[0]))
+    new Set(matches.filter(m => m.phase === activePhase).map(m => getLocalDateStr(m.dateTime)))
   ).sort();
 
   const getDateStats = (dateStr: string) => {
-    const dayMatches = matches.filter(m => m.phase === activePhase && m.dateTime.split('T')[0] === dateStr);
+    const dayMatches = matches.filter(m => m.phase === activePhase && getLocalDateStr(m.dateTime) === dateStr);
     return {
       totalCount: dayMatches.length,
       predictedCount: dayMatches.filter(m => forecasts.some(f => f.matchId === m.id && f.userId === currentUser.id)).length
@@ -142,7 +156,7 @@ export default function MatchesList({
   const activeMatches = matches.filter(m => {
     if (m.phase !== activePhase) return false;
     if (activePhase === 'group' && activeGroupFilter !== 'all' && m.homeTeam.group !== activeGroupFilter) return false;
-    if (activeDateFilter !== 'all' && m.dateTime.split('T')[0] !== activeDateFilter) return false;
+    if (activeDateFilter !== 'all' && getLocalDateStr(m.dateTime) !== activeDateFilter) return false;
     return true;
   });
 
@@ -254,7 +268,7 @@ export default function MatchesList({
           {(() => {
             const matchesByDate: Record<string, Match[]> = {};
             activeMatches.forEach(m => {
-              const dStr = m.dateTime.split('T')[0];
+              const dStr = getLocalDateStr(m.dateTime);
               if (!matchesByDate[dStr]) matchesByDate[dStr] = [];
               matchesByDate[dStr].push(m);
             });
