@@ -493,8 +493,9 @@ export default function App() {
 
   const handleSubmitVoucher = async (amount: number, code: string, filename: string) => {
     if (!currentUser || !currentLeague) return;
+    const targetUserId = authUser?.uid || currentUser.id;
     try {
-      await setDoc(doc(db, 'leagues', currentLeague.code, 'members', currentUser.id), {
+      await setDoc(doc(db, 'leagues', currentLeague.code, 'members', targetUserId), {
         paymentStatus: 'pending',
         paymentVoucherAmount: amount,
         paymentCode: code,
@@ -502,7 +503,7 @@ export default function App() {
         paid: false
       }, { merge: true });
     } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, `leagues/${currentLeague.code}/members/${currentUser.id}`);
+      handleFirestoreError(err, OperationType.WRITE, `leagues/${currentLeague.code}/members/${targetUserId}`);
     }
   };
 
@@ -535,13 +536,14 @@ export default function App() {
 
   const handleLeaveLeague = async (leagueCode: string, newCreatorId?: string) => {
     if (!currentUser) return;
+    const targetUserId = authUser?.uid || currentUser.id;
     try {
       const leagueRef = doc(db, 'leagues', leagueCode);
       const leagueSnap = await getDoc(leagueRef);
       
       if (leagueSnap.exists()) {
         const leagueData = leagueSnap.data();
-        const isCreator = leagueData.creatorId === currentUser.id;
+        const isCreator = leagueData.creatorId === targetUserId;
         
         if (isCreator) {
           if (newCreatorId) {
@@ -562,10 +564,10 @@ export default function App() {
       }
       
       // Remover nuestro registro de miembro de la liga
-      await deleteDoc(doc(db, 'leagues', leagueCode, 'members', currentUser.id));
+      await deleteDoc(doc(db, 'leagues', leagueCode, 'members', targetUserId));
       setCurrentLeague(null);
     } catch (err) {
-      handleFirestoreError(err, OperationType.DELETE, `leagues/${leagueCode}/members/${currentUser.id}`);
+      handleFirestoreError(err, OperationType.DELETE, `leagues/${leagueCode}/members/${targetUserId}`);
     }
   };
 
@@ -793,7 +795,26 @@ export default function App() {
         <div className="space-y-8">
           {activeTab === 'calendar' && <MatchesList matches={matches} forecasts={forecasts} currentUser={currentUser} allUsers={users} onSaveForecast={handleSaveForecast} onUpdateMatchResult={handleUpdateMatchResult} />}
           {activeTab === 'leaderboard' && <Leaderboard stats={currentStats} currentUser={currentUser} matches={matches} forecasts={forecasts} users={users} currentLeague={enrichedCurrentLeague} />}
-          {activeTab === 'leagues' && <LeagueSelector currentUser={currentUser} allUsers={users} currentLeague={enrichedCurrentLeague} allLeagues={enrichedLeagues} onSelectUser={handleSelectSimulatedProfile} onSelectLeague={l => setCurrentLeague(l)} onAddUser={handleAddUser} onAddLeague={handleAddLeague} onJoinLeague={handleJoinLeague} onSavePaymentSettings={handleSavePaymentSettings} onSubmitVoucher={handleSubmitVoucher} memberInfo={currentMemberInfo || undefined} onLeaveLeague={handleLeaveLeague} leagueMembersData={currentLeagueMembersData} />}
+          {activeTab === 'leagues' && (
+            <LeagueSelector
+              currentUser={currentUser}
+              allUsers={users}
+              currentLeague={enrichedCurrentLeague}
+              allLeagues={enrichedLeagues}
+              onSelectUser={handleSelectSimulatedProfile}
+              onSelectLeague={l => setCurrentLeague(l)}
+              onAddUser={handleAddUser}
+              onAddLeague={handleAddLeague}
+              onJoinLeague={handleJoinLeague}
+              onSavePaymentSettings={handleSavePaymentSettings}
+              onSubmitVoucher={handleSubmitVoucher}
+              memberInfo={currentMemberInfo || undefined}
+              onLeaveLeague={handleLeaveLeague}
+              leagueMembersData={currentLeagueMembersData}
+              realUserId={authUser?.uid}
+              realUserEmail={authUser?.email || ''}
+            />
+          )}
           {activeTab === 'sandbox' && <InteractiveSandbox />}
           {activeTab === 'admin' && currentUser?.isAdmin && (
             <AdminPanel

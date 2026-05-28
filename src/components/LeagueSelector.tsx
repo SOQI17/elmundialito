@@ -19,6 +19,8 @@ interface LeagueSelectorProps {
   memberInfo?: { paid?: boolean; balance?: number; paymentStatus?: string; paymentCode?: string };
   onLeaveLeague?: (code: string, newCreatorId?: string) => Promise<void>;
   leagueMembersData?: LeagueMemberInfo[];
+  realUserId?: string;
+  realUserEmail?: string;
 }
 
 const AVATARS = ['🦁', '🦊', '🐻', '🐼', '🐨', '🐱', '🐶', '🐯', '🐴', '🦄', '🦅', '🦉', '⚽', '🏆'];
@@ -37,7 +39,9 @@ export default function LeagueSelector({
   onSubmitVoucher,
   memberInfo,
   onLeaveLeague,
-  leagueMembersData
+  leagueMembersData,
+  realUserId,
+  realUserEmail
 }: LeagueSelectorProps) {
   const [showAddUser, setShowAddUser] = useState(false);
   const [newUserName, setNewUserName] = useState('');
@@ -425,13 +429,16 @@ export default function LeagueSelector({
 
           <div className="grid grid-cols-1 gap-4">
             {enrichedMembers.map(member => {
+              const isRealUserCard = realUserId ? member.id === realUserId : member.id === currentUser.id;
               const isActiveSimulated = member.id === currentUser.id;
               return (
                 <div 
                   key={member.id} 
                   className={`bg-white border rounded-2xl p-5 shadow-xs transition-all ${
-                    isActiveSimulated 
+                    isRealUserCard 
                       ? 'border-indigo-300 ring-4 ring-indigo-500/5 bg-indigo-50/5' 
+                      : isActiveSimulated
+                      ? 'border-slate-300 bg-slate-50/30'
                       : 'border-slate-150 hover:border-slate-200'
                   }`}
                 >
@@ -443,15 +450,27 @@ export default function LeagueSelector({
                       <div>
                         <div className="flex items-center gap-1.5">
                           <span className="text-xs font-black text-slate-800 font-sans">{member.name}</span>
-                          {isActiveSimulated && (
-                            <span className="px-1.5 py-0.5 bg-indigo-100 border border-indigo-200 text-indigo-800 text-[8px] font-black uppercase rounded tracking-wider select-none">
-                              Tú (Activo)
+                          {isRealUserCard && (
+                            <span className="px-1.5 py-0.5 bg-indigo-100 border border-indigo-200 text-indigo-800 text-[8px] font-black uppercase rounded tracking-wider select-none animate-fadeIn">
+                              Tú (Mi Cuenta)
+                            </span>
+                          )}
+                          {!isRealUserCard && isActiveSimulated && (
+                            <span className="px-1.5 py-0.5 bg-slate-100 border border-slate-200 text-slate-600 text-[8px] font-bold uppercase rounded tracking-wider select-none animate-fadeIn">
+                              Simulando
                             </span>
                           )}
                         </div>
                         <span className="text-[9px] text-slate-400 font-bold block uppercase tracking-wider mt-0.5 select-none">
                           {member.isCreator ? '👑 Organizador' : '⚽ Integrante'}
                         </span>
+                        {isRealUserCard && realUserEmail && (
+                          <div className="mt-1.5 select-none">
+                            <span className="text-[9px] text-indigo-650 font-bold bg-indigo-50/80 px-1.5 py-0.5 rounded border border-indigo-100/60 inline-block font-sans select-all">
+                              ✉️ {realUserEmail}
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -486,8 +505,8 @@ export default function LeagueSelector({
                     </div>
                   </div>
 
-                  {/* Acciones exclusivas del perfil simulado activo */}
-                  {isActiveSimulated && (
+                  {/* Acciones exclusivas de la cuenta real del usuario logueado */}
+                  {isRealUserCard && (
                     <div className="mt-4 pt-4 border-t border-slate-100 bg-slate-50/50 rounded-xl p-4 space-y-4">
                       
                       {member.isCreator ? (
