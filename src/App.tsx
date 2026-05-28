@@ -505,6 +505,16 @@ export default function App() {
     }
   };
 
+  const handleLeaveLeague = async (leagueCode: string) => {
+    if (!currentUser) return;
+    try {
+      await deleteDoc(doc(db, 'leagues', leagueCode, 'members', currentUser.id));
+      setCurrentLeague(null);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, `leagues/${leagueCode}/members/${currentUser.id}`);
+    }
+  };
+
   const handleLogout = async () => {
     try { await signOut(auth); setCurrentUser(null); } catch (err) { console.error(err); }
   };
@@ -729,7 +739,7 @@ export default function App() {
         <div className="space-y-8">
           {activeTab === 'calendar' && <MatchesList matches={matches} forecasts={forecasts} currentUser={currentUser} allUsers={users} onSaveForecast={handleSaveForecast} onUpdateMatchResult={handleUpdateMatchResult} />}
           {activeTab === 'leaderboard' && <Leaderboard stats={currentStats} currentUser={currentUser} matches={matches} forecasts={forecasts} users={users} currentLeague={enrichedCurrentLeague} />}
-          {activeTab === 'leagues' && <LeagueSelector currentUser={currentUser} allUsers={users} currentLeague={enrichedCurrentLeague} allLeagues={enrichedLeagues} onSelectUser={handleSelectSimulatedProfile} onSelectLeague={l => setCurrentLeague(l)} onAddUser={handleAddUser} onAddLeague={handleAddLeague} onJoinLeague={handleJoinLeague} onSavePaymentSettings={handleSavePaymentSettings} onSubmitVoucher={handleSubmitVoucher} memberInfo={currentMemberInfo || undefined} />}
+          {activeTab === 'leagues' && <LeagueSelector currentUser={currentUser} allUsers={users} currentLeague={enrichedCurrentLeague} allLeagues={enrichedLeagues} onSelectUser={handleSelectSimulatedProfile} onSelectLeague={l => setCurrentLeague(l)} onAddUser={handleAddUser} onAddLeague={handleAddLeague} onJoinLeague={handleJoinLeague} onSavePaymentSettings={handleSavePaymentSettings} onSubmitVoucher={handleSubmitVoucher} memberInfo={currentMemberInfo || undefined} onLeaveLeague={handleLeaveLeague} />}
           {activeTab === 'sandbox' && <InteractiveSandbox />}
           {activeTab === 'admin' && currentUser?.isAdmin && (
             <AdminPanel

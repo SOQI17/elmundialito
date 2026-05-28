@@ -17,6 +17,7 @@ interface LeagueSelectorProps {
   onSavePaymentSettings?: (bankConfig: League['bankConfig'], costPerEntry: number) => Promise<void>;
   onSubmitVoucher?: (amount: number, code: string, filename: string) => Promise<void>;
   memberInfo?: { paid?: boolean; balance?: number; paymentStatus?: string; paymentCode?: string };
+  onLeaveLeague?: (code: string) => Promise<void>;
 }
 
 const AVATARS = ['🦁', '🦊', '🐻', '🐼', '🐨', '🐱', '🐶', '🐯', '🐴', '🦄', '🦅', '🦉', '⚽', '🏆'];
@@ -33,7 +34,8 @@ export default function LeagueSelector({
   onJoinLeague,
   onSavePaymentSettings,
   onSubmitVoucher,
-  memberInfo
+  memberInfo,
+  onLeaveLeague
 }: LeagueSelectorProps) {
   const [showAddUser, setShowAddUser] = useState(false);
   const [newUserName, setNewUserName] = useState('');
@@ -411,15 +413,34 @@ export default function LeagueSelector({
                   </div>
                 </div>
 
-                {/* Botón para abrir el escáner de pagos si está impago */}
-                {(!memberInfo?.paid || memberInfo?.paymentStatus === 'rejected') && (
+                <div className="flex flex-wrap gap-2 w-full sm:w-auto shrink-0 select-none">
+                  {/* Botón para abrir el escáner de pagos si está impago */}
+                  {(!memberInfo?.paid || memberInfo?.paymentStatus === 'rejected') && (
+                    <button
+                      onClick={() => setShowScanner(true)}
+                      className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer select-none"
+                    >
+                      💸 Pagar Inscripción / Cargar Saldo
+                    </button>
+                  )}
+
+                  {/* Botón para abandonar la liga */}
                   <button
-                    onClick={() => setShowScanner(true)}
-                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer select-none"
+                    onClick={async () => {
+                      const msg = memberInfo?.paid 
+                        ? '¿Seguro que deseas abandonar esta liga? Perderás tu saldo acreditado y todas tus apuestas registradas en este grupo.'
+                        : '¿Seguro que deseas salir de esta liga de amigos?';
+                      if (window.confirm(msg)) {
+                        if (onLeaveLeague) {
+                          await onLeaveLeague(currentLeague.code);
+                        }
+                      }
+                    }}
+                    className="px-4 py-2 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 font-bold text-xs rounded-xl transition-all cursor-pointer select-none"
                   >
-                    💸 Pagar Inscripción / Cargar Saldo
+                    Abandonar Liga
                   </button>
-                )}
+                </div>
               </div>
             )}
           </div>
