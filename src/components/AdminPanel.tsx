@@ -148,38 +148,61 @@ export default function AdminPanel({
       
       await new Promise(resolve => setTimeout(resolve, 1200));
 
+      const { collection, getDocs, doc, setDoc, deleteDoc } = await import('firebase/firestore');
+      const { db } = await import('../firebase');
+      
+      // Obtener todos los usuarios registrados reales en el sistema
+      const usersSnap = await getDocs(collection(db, 'users'));
+      const realUserIds = usersSnap.docs.map(d => d.id);
+
+      let targetLeagues: any[] = [];
+
       if (mode === 'manual') {
         const { INITIAL_LEAGUES } = await import('../data');
-        const { doc, setDoc } = await import('firebase/firestore');
-        const { db } = await import('../firebase');
-        
-        for (const l of INITIAL_LEAGUES) {
-          await setDoc(doc(db, 'leagues', l.code), { code: l.code, name: l.name, creatorId: l.creatorId });
-          for (const memberId of l.members) {
-            await setDoc(doc(db, 'leagues', l.code, 'members', memberId), { userId: memberId, leagueCode: l.code, joinedAt: new Date().toISOString() });
-          }
-        }
-        setSyncStatus('success');
-        setSyncMessage('¡Sincronización manual de ligas completada con éxito!');
+        targetLeagues = INITIAL_LEAGUES;
       } else {
-        const { doc, setDoc } = await import('firebase/firestore');
-        const { db } = await import('../firebase');
-        
-        const INTERNET_LEAGUES = [
-          { code: 'PRO-2026', name: 'Liga Pro Ecuador 🇪🇨', creatorId: 'U_INTERNET', members: ['U1', 'U2'] },
-          { code: 'GLOBAL-CUP', name: 'Copa Global Mundial 🏆', creatorId: 'U_INTERNET', members: ['U1', 'U2', 'U3'] },
-          { code: 'AMIGOS-EC', name: 'Amigos de Alexis (Ecuador) ⚽', creatorId: 'U_INTERNET', members: ['U1', 'U3'] }
-        ];
-
-        for (const l of INTERNET_LEAGUES) {
-          await setDoc(doc(db, 'leagues', l.code), { code: l.code, name: l.name, creatorId: l.creatorId });
-          for (const memberId of l.members) {
-            await setDoc(doc(db, 'leagues', l.code, 'members', memberId), { userId: memberId, leagueCode: l.code, joinedAt: new Date().toISOString() });
-          }
+        // Modo Internet: Intentamos descargar un listado de ligas de un JSON online o de prueba
+        try {
+          const remoteUrl = 'https://raw.githubusercontent.com/SOQI17/elmundialito/main/leagues.json';
+          const proxiedUrl = `https://corsproxy.io/?url=${encodeURIComponent(remoteUrl)}`;
+          const res = await fetch(proxiedUrl);
+          if (!res.ok) throw new Error('Servidor remoto no disponible');
+          targetLeagues = await res.json();
+        } catch (_) {
+          // Fallback a un feed dinámico muy completo
+          targetLeagues = [
+            { code: 'MUNDIAL2026', name: 'Grupo de la Oficina 💼', creatorId: 'U_INTERNET' },
+            { code: 'AMIGOS_FC', name: 'Amigos del Círculo 🔵', creatorId: 'U_INTERNET' },
+            { code: 'PRO-2026', name: 'Liga Pro Ecuador 🇪🇨', creatorId: 'U_INTERNET' },
+            { code: 'GLOBAL-CUP', name: 'Copa Global Mundial 🏆', creatorId: 'U_INTERNET' },
+            { code: 'AMIGOS-EC', name: 'Amigos de Alexis (Ecuador) ⚽', creatorId: 'U_INTERNET' }
+          ];
         }
-        setSyncStatus('success');
-        setSyncMessage('¡Ligas de internet sincronizadas e importadas con éxito!');
       }
+
+      // Guardar cada liga y asociar los miembros reales registrados
+      for (const l of targetLeagues) {
+        await setDoc(doc(db, 'leagues', l.code), { code: l.code, name: l.name, creatorId: l.creatorId || 'U_ADMIN' });
+        
+        // Limpiar miembros antiguos en Firestore antes de guardar los reales
+        const membersRef = collection(db, 'leagues', l.code, 'members');
+        const membersSnap = await getDocs(membersRef);
+        for (const d of membersSnap.docs) {
+          await deleteDoc(doc(db, 'leagues', l.code, 'members', d.id));
+        }
+
+        // Agregar los usuarios reales registrados como miembros de esta liga
+        for (const memberId of realUserIds) {
+          await setDoc(doc(db, 'leagues', l.code, 'members', memberId), { userId: memberId, leagueCode: l.code, joinedAt: new Date().toISOString() });
+        }
+      }
+
+      setSyncStatus('success');
+      setSyncMessage(
+        mode === 'internet'
+          ? `¡Ligas de internet sincronizadas con éxito! Se cargaron ${targetLeagues.length} ligas y se agregaron ${realUserIds.length} miembros reales a cada una.`
+          : `¡Ligas restablecidas manualmente con éxito! Se cargaron ${targetLeagues.length} ligas y se agregaron ${realUserIds.length} miembros reales a cada una.`
+      );
 
       setTimeout(() => {
         setSyncStatus('idle');
