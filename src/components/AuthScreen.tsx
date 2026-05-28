@@ -3,6 +3,7 @@ import {
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
   signInWithPopup, 
+  signInWithRedirect,
   GoogleAuthProvider,
   sendPasswordResetEmail,
   updateProfile
@@ -39,7 +40,16 @@ const friendlyError = (code: string): string => {
       "Sin conexión a internet. Verifica tu red.",
     "auth/popup-closed-by-user":
       "Cerraste la ventana de Google antes de completar el ingreso.",
-    "auth/cancelled-popup-request": "",
+    "auth/cancelled-popup-request":
+      "Se canceló el inicio de sesión con Google. Por favor, intenta de nuevo.",
+    "auth/popup-blocked":
+      "Tu navegador bloqueó la ventana emergente de Google. Estamos intentando redirigirte automáticamente para completar el ingreso, o por favor permite las ventanas emergentes.",
+    "auth/unauthorized-domain":
+      "Este dominio (o dirección IP local) no está autorizado para usar Google Auth en Firebase. Agrégalo en Firebase Console > Authentication > Settings > Authorized domains.",
+    "auth/account-exists-with-different-credential":
+      "Ya existe una cuenta con este mismo correo usando otro método (ej: Contraseña). Por favor, ingresa con tu contraseña.",
+    "auth/internal-error":
+      "Error interno de comunicación con los servidores de Google. Por favor, intenta de nuevo.",
   };
   return map[code] || `Error inesperado (${code}). Intenta de nuevo.`;
 };
@@ -118,7 +128,11 @@ export default function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
     clearMessages();
     setLoading(true);
     const provider = new GoogleAuthProvider();
+    // Forzar la selección de cuenta para evitar logins automáticos no deseados
+    provider.setCustomParameters({ prompt: 'select_account' });
+
     try {
+      // Intentar primero con la ventana emergente (popup)
       const result = await signInWithPopup(auth, provider);
       const user = result.user;
 
@@ -137,9 +151,29 @@ export default function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
 
       onAuthSuccess();
     } catch (err: any) {
-      console.error(err);
-      const msg = friendlyError(err.code);
-      if (msg) setError(msg);
+      console.error("Google Popup Auth Error:", err);
+      
+      // Si la ventana fue bloqueada por el navegador, o el usuario está en móvil/navegadores in-app 
+      // (ej: WhatsApp/Instagram donde los popups fallan al 100%), hacemos fallback automático a redirección.
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      
+      if (
+        err.code === "auth/popup-blocked" || 
+        err.code === "auth/cancelled-popup-request" ||
+        isMobile
+      ) {
+        try {
+          console.warn("Popup bloqueado o entorno móvil detectado. Intentando con redirección...");
+          await signInWithRedirect(auth, provider);
+          // Nota: La página se redirigirá. Al regresar, onAuthStateChanged en App.tsx detectará el inicio de sesión.
+          return;
+        } catch (redirectErr: any) {
+          console.error("Google Redirect Auth Error:", redirectErr);
+          setError(friendlyError(redirectErr.code) || redirectErr.message);
+        }
+      } else {
+        setError(friendlyError(err.code) || err.message);
+      }
     } finally {
       setLoading(false);
     }
