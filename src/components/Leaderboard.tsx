@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { UserStats, UserProfile, Match, Forecast, League } from '../types';
-import { Trophy, Award, Search, Percent, Medal, BarChart2, Calendar } from 'lucide-react';
+import { Trophy, Award, Search, Percent, Medal, BarChart2, Calendar, ChevronDown, ChevronUp, BookOpen, Coins } from 'lucide-react';
 import { calculateScore } from '../utils/scoring';
 import TeamFlag from './TeamFlag';
 
@@ -24,6 +24,7 @@ export default function Leaderboard({
   const [searchTerm, setSearchTerm] = useState('');
   const [activeDateFilter, setActiveDateFilter] = useState<string>('all');
   const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
+  const [showRules, setShowRules] = useState(false);
 
   const getLocalDateStr = (dateStr: string) => {
     const d = new Date(dateStr);
@@ -259,6 +260,95 @@ export default function Leaderboard({
         </div>
       </div>
 
+      {/* Botón y Acordeón del Reglamento Profesional */}
+      <div className="bg-slate-50 border border-slate-200/60 rounded-xl p-4 transition-all">
+        <button
+          onClick={() => setShowRules(!showRules)}
+          className="w-full flex items-center justify-between text-left focus:outline-none group cursor-pointer"
+        >
+          <div className="flex items-center gap-2.5">
+            <BookOpen className="w-5 h-5 text-indigo-600 group-hover:scale-110 transition-transform" />
+            <div>
+              <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">
+                Reglamento y Sistema de Puntuación Profesional
+              </h3>
+              <p className="text-[10px] text-slate-505 text-slate-500 font-semibold mt-0.5">
+                Conoce el formato oficial 3-2-1-0 de adjudicación de puntos (Estándar de Quinielas FIFA).
+              </p>
+            </div>
+          </div>
+          {showRules ? (
+            <ChevronUp className="w-4 h-4 text-slate-500" />
+          ) : (
+            <ChevronDown className="w-4 h-4 text-slate-500 group-hover:translate-y-0.5 transition-transform" />
+          )}
+        </button>
+
+        {showRules && (
+          <div className="mt-4 pt-3.5 border-t border-slate-200/80 grid grid-cols-1 md:grid-cols-4 gap-3.5 animate-fadeIn">
+            <div className="bg-white p-3 rounded-xl border border-emerald-100 flex flex-col justify-between shadow-xs">
+              <div>
+                <span className="inline-flex items-center px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-black rounded-md mb-2">
+                  🎯 3 PUNTOS
+                </span>
+                <h4 className="font-bold text-xs text-slate-900 mb-1">Acierto Perfecto</h4>
+                <p className="text-[10px] text-slate-500 leading-normal font-medium">
+                  Atinas con exactitud al equipo ganador (o empate) <strong>Y</strong> al marcador exacto de goles de ambos equipos.
+                </p>
+              </div>
+              <span className="text-[9px] text-emerald-700 font-black mt-2 bg-emerald-50 px-2 py-0.5 rounded self-start">
+                Ej: Pronóstico 2-1 | Real 2-1
+              </span>
+            </div>
+
+            <div className="bg-white p-3 rounded-xl border border-indigo-100 flex flex-col justify-between shadow-xs">
+              <div>
+                <span className="inline-flex items-center px-2 py-0.5 bg-indigo-100 text-indigo-800 text-[10px] font-black rounded-md mb-2">
+                  📈 2 PUNTOS
+                </span>
+                <h4 className="font-bold text-xs text-slate-900 mb-1">Acierto por Tendencia</h4>
+                <p className="text-[10px] text-slate-500 leading-normal font-medium">
+                  Atinas al ganador y a la <strong>diferencia exacta de goles</strong>, o atinas a un empate pero con diferente marcador.
+                </p>
+              </div>
+              <span className="text-[9px] text-indigo-700 font-black mt-2 bg-indigo-50 px-2 py-0.5 rounded self-start">
+                Ej: Pronóstico 2-0 | Real 3-1 (+2 dif)
+              </span>
+            </div>
+
+            <div className="bg-white p-3 rounded-xl border border-blue-100 flex flex-col justify-between shadow-xs">
+              <div>
+                <span className="inline-flex items-center px-2 py-0.5 bg-blue-100 text-blue-800 text-[10px] font-black rounded-md mb-2">
+                  ⚽ 1 PUNTO
+                </span>
+                <h4 className="font-bold text-xs text-slate-900 mb-1">Acierto Simple</h4>
+                <p className="text-[10px] text-slate-500 leading-normal font-medium">
+                  Atinas únicamente al ganador o empate, pero con <strong>diferente marcador y diferencia</strong> de goles.
+                </p>
+              </div>
+              <span className="text-[9px] text-blue-700 font-black mt-2 bg-blue-50 px-2 py-0.5 rounded self-start">
+                Ej: Pronóstico 2-1 | Real 1-0
+              </span>
+            </div>
+
+            <div className="bg-white p-3 rounded-xl border border-rose-100 flex flex-col justify-between shadow-xs">
+              <div>
+                <span className="inline-flex items-center px-2 py-0.5 bg-rose-100 text-rose-800 text-[10px] font-black rounded-md mb-2">
+                  ❌ 0 PUNTOS
+                </span>
+                <h4 className="font-bold text-xs text-slate-900 mb-1">Sin Acierto</h4>
+                <p className="text-[10px] text-slate-500 leading-normal font-medium">
+                  Fallas al predecir el resultado (ej: pronosticas victoria local y resulta empate o victoria visitante).
+                </p>
+              </div>
+              <span className="text-[9px] text-rose-700 font-black mt-2 bg-rose-50 px-2 py-0.5 rounded self-start">
+                Ej: Pronóstico 3-1 | Real 1-2
+              </span>
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Date Filter Tabs for Daily Leaderboards */}
       {matches && matches.length > 0 && uniqueDates.length > 0 && (
         <div className="flex flex-col gap-2.5 bg-slate-50 p-4 rounded-xl border border-slate-200/65" id="leaderboard-date-filter">
@@ -386,6 +476,93 @@ export default function Leaderboard({
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Distribución del Pozo de Premios de la Liga */}
+      {currentLeague && (
+        <div className="bg-gradient-to-tr from-indigo-900 via-indigo-950 to-slate-900 rounded-2xl p-6 text-white border border-indigo-500/30 shadow-lg space-y-5" id="prize-pool-distributor">
+          
+          {/* Header of Prize Pool */}
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-indigo-500/20 pb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center">
+                <Coins className="w-5 h-5 text-amber-400 animate-bounce" />
+              </div>
+              <div>
+                <h3 className="text-sm font-black uppercase tracking-wider text-indigo-350 text-indigo-200">
+                  Pozo Acumulado de la Liga ({currentLeague.name})
+                </h3>
+                <p className="text-[10px] text-indigo-300 font-semibold mt-0.5">
+                  Reparto Profesional Equilibrado (60% / 25% / 15%) según clasificación activa en vivo.
+                </p>
+              </div>
+            </div>
+
+            {/* Total collected metric */}
+            <div className="text-right">
+              <span className="text-xs text-indigo-300 font-bold block uppercase tracking-wider">Pozo Total Recaudado</span>
+              <span className="text-2xl font-black text-amber-400 font-mono">
+                ${(currentLeague.members ? currentLeague.members.length : 0) * (currentLeague.costPerEntry || 0)}.00 USD
+              </span>
+              <span className="text-[9px] text-slate-300 block mt-0.5">
+                {currentLeague.members ? currentLeague.members.length : 0} participantes × ${currentLeague.costPerEntry || 0}.00 USD
+              </span>
+            </div>
+          </div>
+
+          {/* Podiums Awards Mapping */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {(() => {
+              const totalPool = (currentLeague.members ? currentLeague.members.length : 0) * (currentLeague.costPerEntry || 0);
+              
+              // Percentages for the balanced distribution
+              const splits = [
+                { percent: 0.60, label: '🥇 1er Puesto (Campeón)', share: 0.60 * totalPool, textCol: 'text-amber-450 text-amber-400', borderCol: 'border-amber-500/40 bg-amber-500/5' },
+                { percent: 0.25, label: '🥈 2do Puesto (Subcampeón)', share: 0.25 * totalPool, textCol: 'text-slate-300', borderCol: 'border-slate-550 border-slate-500/30 bg-slate-500/5' },
+                { percent: 0.15, label: '🥉 3er Puesto (Consolación)', share: 0.15 * totalPool, textCol: 'text-amber-500', borderCol: 'border-amber-700/30 bg-amber-700/5' }
+              ];
+
+              return splits.map((item, idx) => {
+                // Get member currently in this position
+                const leader = podiumList[idx];
+
+                return (
+                  <div key={idx} className={`rounded-xl border p-4 flex flex-col justify-between ${item.borderCol} transition-all hover:scale-[1.01]`}>
+                    <div className="flex justify-between items-start">
+                      <span className="text-[10px] font-black uppercase text-indigo-300 tracking-wider">
+                        {item.label}
+                      </span>
+                      <span className="text-[10px] font-black bg-indigo-500/20 px-2 py-0.5 rounded-full text-indigo-200">
+                        {item.percent * 100}%
+                      </span>
+                    </div>
+
+                    <div className="my-4 flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-indigo-950 border border-indigo-850 flex items-center justify-center text-xl shadow-inner shrink-0 select-none">
+                        {leader ? leader.userAvatar : '👤'}
+                      </div>
+                      <div className="min-w-0">
+                        <span className="text-xs font-black block truncate text-slate-100">
+                          {leader ? leader.userName : 'Esperando participante...'}
+                        </span>
+                        <span className="text-[9px] text-indigo-300 block mt-0.5 font-semibold">
+                          {leader ? `${leader.totalPoints} Pts obtenidos` : 'Posición no definida'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="pt-3 border-t border-indigo-500/10 flex justify-between items-baseline">
+                      <span className="text-[9px] text-indigo-300 font-bold uppercase">Premio Asignado</span>
+                      <span className={`text-lg font-black font-mono ${item.textCol}`}>
+                        ${item.share.toFixed(2)} USD
+                      </span>
+                    </div>
+                  </div>
+                );
+              });
+            })()}
+          </div>
         </div>
       )}
 
