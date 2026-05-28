@@ -43,6 +43,14 @@ export default function LeagueSelector({
   realUserId,
   realUserEmail
 }: LeagueSelectorProps) {
+  const isAdmin = currentUser.isAdmin || (realUserEmail === 'alexisguerra9577@gmail.com');
+  const visibleLeagues = isAdmin
+    ? allLeagues
+    : allLeagues.filter(league => {
+        const targetId = realUserId || currentUser.id;
+        return (league.members || []).includes(targetId);
+      });
+
   const [showAddUser, setShowAddUser] = useState(false);
   const [newUserName, setNewUserName] = useState('');
   const [newUserAvatar, setNewUserAvatar] = useState(AVATARS[0]);
@@ -181,12 +189,17 @@ export default function LeagueSelector({
             <div className="flex items-center gap-2">
               <h3 className="text-lg font-bold text-slate-900 font-sans">{currentUser.name}</h3>
               {currentUser.isAdmin && (
-                <span className="px-2 py-0.5 bg-indigo-100 text-indigo-800 text-[10px] font-bold rounded-md uppercase">
+                <span className="px-2 py-0.5 bg-indigo-100 text-indigo-800 text-[10px] font-bold rounded-md uppercase select-none">
                   Admin
                 </span>
               )}
             </div>
-            <p className="text-xs text-slate-500 mt-0.5">Identidad activa para pronósticos</p>
+            <p className="text-xs text-slate-500 mt-0.5 select-none">Identidad activa para pronósticos</p>
+            {realUserEmail && (
+              <span className="text-[10px] text-indigo-650 bg-indigo-50/80 px-2 py-0.5 rounded border border-indigo-100/60 font-semibold block mt-1.5 select-all w-fit animate-fadeIn">
+                ✉️ Correo: {realUserEmail}
+              </span>
+            )}
           </div>
         </div>
 
@@ -393,7 +406,7 @@ export default function LeagueSelector({
               <span>Global</span>
             </button>
             
-            {allLeagues.map((league) => {
+            {visibleLeagues.map((league) => {
               const isSelected = currentLeague?.code === league.code;
               return (
                 <button
