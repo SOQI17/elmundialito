@@ -505,9 +505,35 @@ export default function App() {
     }
   };
 
-  const handleLeaveLeague = async (leagueCode: string) => {
+  const handleLeaveLeague = async (leagueCode: string, newCreatorId?: string) => {
     if (!currentUser) return;
     try {
+      const leagueRef = doc(db, 'leagues', leagueCode);
+      const leagueSnap = await getDoc(leagueRef);
+      
+      if (leagueSnap.exists()) {
+        const leagueData = leagueSnap.data();
+        const isCreator = leagueData.creatorId === currentUser.id;
+        
+        if (isCreator) {
+          if (newCreatorId) {
+            // Transferir propiedad al nuevo creador
+            await setDoc(leagueRef, { creatorId: newCreatorId }, { merge: true });
+          } else {
+            // Si somos el único miembro (o si el grupo queda vacío), eliminar por completo la liga
+            const membersRef = collection(db, 'leagues', leagueCode, 'members');
+            const membersSnap = await getDocs(membersRef);
+            for (const d of membersSnap.docs) {
+              await deleteDoc(doc(db, 'leagues', leagueCode, 'members', d.id));
+            }
+            await deleteDoc(leagueRef);
+            setCurrentLeague(null);
+            return;
+          }
+        }
+      }
+      
+      // Remover nuestro registro de miembro de la liga
       await deleteDoc(doc(db, 'leagues', leagueCode, 'members', currentUser.id));
       setCurrentLeague(null);
     } catch (err) {

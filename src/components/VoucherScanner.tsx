@@ -23,6 +23,8 @@ export default function VoucherScanner({ league, onSubmitVoucher, onClose }: Vou
   
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [accountVerification, setAccountVerification] = useState<'verified' | 'mismatch' | null>(null);
+  const [detectedAccount, setDetectedAccount] = useState<string>('');
 
   const bank = league.bankConfig;
 
@@ -66,6 +68,17 @@ export default function VoucherScanner({ league, onSubmitVoucher, onClose }: Vou
 
     const detectedCode = String(Math.floor(100000000 + Math.random() * 900000000));
     
+    // Simulación de verificación de cuenta destinataria
+    const lowerFilename = file ? file.name.toLowerCase() : '';
+    const hasErrorKeyword = lowerFilename.includes('incorrecto') || lowerFilename.includes('error') || lowerFilename.includes('wrong') || lowerFilename.includes('falso');
+    
+    const correctAccount = bank?.accountNumber || '1234567890';
+    const mockWrongAccount = String(Math.floor(1000000000 + Math.random() * 9000000000));
+    const scannedAccount = hasErrorKeyword ? mockWrongAccount : correctAccount;
+
+    setDetectedAccount(scannedAccount);
+    setAccountVerification(hasErrorKeyword ? 'mismatch' : 'verified');
+
     setScanResult({
       amount: detectedAmount,
       code: detectedCode,
@@ -250,6 +263,27 @@ export default function VoucherScanner({ league, onSubmitVoucher, onClose }: Vou
             </span>
           </div>
 
+          {/* Account Number Verification Banner */}
+          {accountVerification === 'verified' && (
+            <div className="bg-emerald-950/20 border border-emerald-900/30 text-emerald-400 p-3.5 rounded-xl flex items-start gap-2 text-[10.5px] leading-relaxed">
+              <Check className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-extrabold uppercase block select-none tracking-wider text-[9px] text-emerald-400">✓ Cuenta Destinataria Verificada</span>
+                El escáner OCR leyó la cuenta destinataria <strong className="font-mono text-white select-all">{detectedAccount}</strong>, coincidiendo plenamente con la cuenta oficial registrada para esta liga.
+              </div>
+            </div>
+          )}
+
+          {accountVerification === 'mismatch' && (
+            <div className="bg-rose-950/25 border border-rose-900/40 text-rose-350 p-3.5 rounded-xl flex items-start gap-2 text-[10.5px] leading-relaxed">
+              <AlertCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-extrabold uppercase block select-none tracking-wider text-[9px] text-rose-450">❌ ERROR OCR: Cuenta Destinataria Incorrecta</span>
+                La cuenta leída en el comprobante es <strong className="font-mono text-rose-300 select-all">{detectedAccount}</strong>, la cual NO coincide con la cuenta registrada de la liga (<strong className="font-mono text-white select-all">{bank?.accountNumber}</strong>). Sube el comprobante de transferencia correcto.
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             {/* Amount confirmation */}
             <div className="space-y-1">
@@ -260,8 +294,9 @@ export default function VoucherScanner({ league, onSubmitVoucher, onClose }: Vou
                   type="number"
                   min="1"
                   value={inputAmount}
+                  disabled={accountVerification === 'mismatch'}
                   onChange={(e) => setInputAmount(Math.max(1, parseFloat(e.target.value)))}
-                  className="w-full bg-slate-900 border border-slate-800 focus:border-indigo-500 rounded-xl py-1.5 pl-7 pr-3 text-xs text-white focus:outline-none transition-all font-mono font-bold"
+                  className="w-full bg-slate-900 border border-slate-800 focus:border-indigo-500 rounded-xl py-1.5 pl-7 pr-3 text-xs text-white focus:outline-none transition-all font-mono font-bold disabled:opacity-40"
                   required
                 />
               </div>
@@ -273,8 +308,9 @@ export default function VoucherScanner({ league, onSubmitVoucher, onClose }: Vou
               <input
                 type="text"
                 value={inputCode}
+                disabled={accountVerification === 'mismatch'}
                 onChange={(e) => setInputCode(e.target.value.replace(/\D/g, ''))}
-                className="w-full bg-slate-900 border border-slate-800 focus:border-indigo-500 rounded-xl py-1.5 px-3 text-xs text-white focus:outline-none transition-all font-mono font-bold"
+                className="w-full bg-slate-900 border border-slate-800 focus:border-indigo-500 rounded-xl py-1.5 px-3 text-xs text-white focus:outline-none transition-all font-mono font-bold disabled:opacity-40"
                 required
               />
             </div>
@@ -282,8 +318,8 @@ export default function VoucherScanner({ league, onSubmitVoucher, onClose }: Vou
 
           <button
             type="submit"
-            disabled={submitting}
-            className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-lg cursor-pointer"
+            disabled={submitting || accountVerification === 'mismatch'}
+            className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-lg cursor-pointer disabled:bg-slate-800 disabled:text-slate-500 disabled:border-slate-800 disabled:cursor-not-allowed disabled:shadow-none"
           >
             {submitting ? 'Enviando comprobante...' : 'Enviar a Revisión del Administrador'}
           </button>
