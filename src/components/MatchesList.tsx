@@ -17,6 +17,7 @@ interface MatchesListProps {
     status: Match['status']
   ) => void;
   currentLeague?: League | null;
+  allLeagues?: League[];
 }
 
 const PHASES_LABELS: Record<MatchPhase, string> = {
@@ -51,7 +52,8 @@ export default function MatchesList({
   allUsers,
   onSaveForecast,
   onUpdateMatchResult,
-  currentLeague
+  currentLeague,
+  allLeagues = []
 }: MatchesListProps) {
   const [activePhase, setActivePhase] = useState<MatchPhase>('group');
   const [activeGroupFilter, setActiveGroupFilter] = useState<string>('all');
@@ -61,6 +63,14 @@ export default function MatchesList({
   const [savingMatchIds, setSavingMatchIds] = useState<Record<string, boolean>>({});
   const [selectedLiveMatch, setSelectedLiveMatch] = useState<Match | null>(null);
   const [now, setNow] = useState<Date>(new Date());
+
+  // Import Modal States
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [selectedSourceLeagueCode, setSelectedSourceLeagueCode] = useState<string>('');
+  const [importing, setImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState(0);
+  const [importStatus, setImportStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [importResultText, setImportResultText] = useState('');
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -128,12 +138,12 @@ export default function MatchesList({
     const dayMatches = matches.filter(m => m.phase === activePhase && getLocalDateStr(m.dateTime) === dateStr);
     return {
       totalCount: dayMatches.length,
-      predictedCount: dayMatches.filter(m => forecasts.some(f => f.matchId === m.id && f.userId === currentUser.id)).length
+      predictedCount: dayMatches.filter(m => forecasts.some(f => f.matchId === m.id && f.userId === currentUser.id && (!currentLeague || f.leagueCode === currentLeague.code))).length
     };
   };
 
   const getMyForecast = (matchId: string): Forecast | undefined =>
-    forecasts.find(f => f.matchId === matchId && f.userId === currentUser.id);
+    forecasts.find(f => f.matchId === matchId && f.userId === currentUser.id && (!currentLeague || f.leagueCode === currentLeague.code));
 
   const handleScoreChange = (matchId: string, team: 'home' | 'away', currentVal: number, step: number) => {
     const forecast = getMyForecast(matchId);
@@ -159,6 +169,59 @@ export default function MatchesList({
     }
   };
 
+  const handleImportForecasts = async () => {
+    if (!selectedSourceLeagueCode) return;
+    setImporting(true);
+    setImportProgress(0);
+    setImportStatus('idle');
+
+    try {
+      // Find forecasts from the selected source league that belong to this user
+      const sourceForecasts = forecasts.filter(
+        f => f.userId === currentUser.id && f.leagueCode === selectedSourceLeagueCode
+      );
+
+      if (sourceForecasts.length === 0) {
+        setImportStatus('error');
+        setImportResultText('No se encontraron pronósticos en la liga seleccionada.');
+        setImporting(false);
+        return;
+      }
+
+      // Filter only editable matches (not started yet, scheduled)
+      const eligibleForecasts = sourceForecasts.filter(f => {
+        const match = matches.find(m => m.id === f.matchId);
+        if (!match) return false;
+        const isLocked = match.status === 'live' || match.status === 'finished' || now.getTime() >= new Date(match.dateTime).getTime();
+        return !isLocked;
+      });
+
+      if (eligibleForecasts.length === 0) {
+        setImportStatus('error');
+        setImportResultText('No hay pronósticos pendientes o elegibles para importar en esta liga (todos los partidos ya comenzaron).');
+        setImporting(false);
+        return;
+      }
+
+      let copiedCount = 0;
+      for (let i = 0; i < eligibleForecasts.length; i++) {
+        const f = eligibleForecasts[i];
+        await onSaveForecast(f.matchId, f.homeScore, f.awayScore);
+        copiedCount++;
+        setImportProgress(Math.round(((i + 1) / eligibleForecasts.length) * 100));
+      }
+
+      setImportStatus('success');
+      setImportResultText(`¡Se importaron con éxito ${copiedCount} pronósticos!`);
+    } catch (err) {
+      console.error('Error importing forecasts:', err);
+      setImportStatus('error');
+      setImportResultText('Ocurrió un error inesperado durante la importación.');
+    } finally {
+      setImporting(false);
+    }
+  };
+
   const activeMatches = matches.filter(m => {
     if (m.phase !== activePhase) return false;
     if (activePhase === 'group' && activeGroupFilter !== 'all' && m.homeTeam.group !== activeGroupFilter) return false;
@@ -171,7 +234,24 @@ export default function MatchesList({
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-100 pb-4">
         <div>
-          <h2 className="text-xl font-bold text-slate-900 font-sans">Calendario de Partidos</h2>
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-xl font-bold text-slate-900 font-sans">Calendario de Partidos</h2>
+            {currentUser && !currentUser.isAdmin && (
+              <button
+                onClick={() => {
+                  setSelectedSourceLeagueCode('');
+                  setImportProgress(0);
+                  setImportStatus('idle');
+                  setImportResultText('');
+                  setShowImportModal(true);
+                }}
+                className="px-2.5 py-1 text-[10px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 rounded-lg flex items-center gap-1 transition-all shadow-xs cursor-pointer active:scale-95"
+              >
+                <Sparkles className="w-3 h-3 text-indigo-600 animate-pulse" />
+                Importar de otra liga
+              </button>
+            )}
+          </div>
           <p className="text-xs text-slate-500 mt-1">Registra tus marcadores estimados o revisa los pronósticos cruzados de tus amigos.</p>
         </div>
         <div className="px-3 py-1.5 bg-indigo-50/70 border border-indigo-100/40 rounded-lg text-[11px] text-indigo-800 flex items-center gap-2">
@@ -323,13 +403,13 @@ export default function MatchesList({
                       const isPendingValue = hasDraft && (!userForecast || userForecast.homeScore !== draft.homeScore || userForecast.awayScore !== draft.awayScore);
                       const displayHomeScore = hasDraft ? draft.homeScore : (userForecast ? userForecast.homeScore : undefined);
                       const displayAwayScore = hasDraft ? draft.awayScore : (userForecast ? userForecast.awayScore : undefined);
-                       const otherForecasts = forecasts.filter(f => {
-                         if (f.matchId !== match.id || f.userId === currentUser.id) return false;
-                         if (currentLeague) {
-                           return (currentLeague.members || []).includes(f.userId);
-                         }
-                         return true;
-                       });
+                      const otherForecasts = forecasts.filter(f => {
+                          if (f.matchId !== match.id || f.userId === currentUser.id) return false;
+                          if (currentLeague) {
+                            return (currentLeague.members || []).includes(f.userId) && f.leagueCode === currentLeague.code;
+                          }
+                          return true;
+                        });
 
                       return (
                         <div
@@ -594,6 +674,159 @@ export default function MatchesList({
           onClose={() => setSelectedLiveMatch(null)}
           onUpdateMatchResult={onUpdateMatchResult}
         />
+      )}
+
+      {showImportModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
+          <div className="w-full max-w-md bg-white rounded-2xl border border-slate-100 shadow-xl overflow-hidden animate-slideUp">
+            {/* Modal Header */}
+            <div className="px-6 py-4 bg-slate-50/50 border-b border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 bg-indigo-50 border border-indigo-100 text-indigo-600 rounded-lg flex items-center justify-center">
+                  <Sparkles className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-sm">Importar Pronósticos</h3>
+                  <p className="text-[10px] text-slate-500">Copia tus pronósticos de otra liga</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowImportModal(false)}
+                disabled={importing}
+                className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg text-xs font-bold transition-all cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 space-y-4">
+              {(() => {
+                const otherLeagues = allLeagues.filter(l => 
+                  l.members.includes(currentUser.id) && 
+                  l.code !== currentLeague?.code
+                );
+
+                if (otherLeagues.length === 0) {
+                  return (
+                    <div className="text-center py-6 space-y-3">
+                      <span className="text-3xl select-none">📭</span>
+                      <h4 className="text-xs font-bold text-slate-700">No tienes otras ligas</h4>
+                      <p className="text-[11px] text-slate-500 leading-relaxed max-w-xs mx-auto">
+                        Para poder importar pronósticos, necesitas pertenecer a al menos otra liga activa donde ya hayas registrado marcadores.
+                      </p>
+                      <div className="pt-2">
+                        <button 
+                          onClick={() => setShowImportModal(false)}
+                          className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-all cursor-pointer"
+                        >
+                          Entendido
+                        </button>
+                      </div>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="space-y-4">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Seleccionar Liga de Origen</label>
+                      <select 
+                        value={selectedSourceLeagueCode}
+                        onChange={(e) => {
+                          setSelectedSourceLeagueCode(e.target.value);
+                          setImportStatus('idle');
+                          setImportResultText('');
+                        }}
+                        disabled={importing}
+                        className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 focus:outline-none focus:border-indigo-500 transition-all cursor-pointer"
+                      >
+                        <option value="">-- Elige una liga para copiar --</option>
+                        {otherLeagues.map(l => {
+                          const count = forecasts.filter(f => f.userId === currentUser.id && f.leagueCode === l.code).length;
+                          return (
+                            <option key={l.code} value={l.code}>
+                              {l.name} [{l.code}] ({count} pronósticos)
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </div>
+
+                    {importStatus === 'idle' && selectedSourceLeagueCode && (
+                      <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl flex items-start gap-2.5">
+                        <span className="text-base select-none mt-0.5">💡</span>
+                        <div className="space-y-1">
+                          <span className="text-[10px] font-bold text-amber-800 uppercase block">Reglas de Importación</span>
+                          <p className="text-[10px] text-amber-700 leading-normal">
+                            Se copiarán únicamente los pronósticos de partidos que aún <strong>no hayan comenzado</strong> (kickoff en el futuro). Los marcadores en partidos cerrados no se alterarán.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {importing && (
+                      <div className="space-y-2 py-2">
+                        <div className="flex justify-between items-center text-[10px] font-bold text-indigo-700">
+                          <span className="animate-pulse">Importando marcadores...</span>
+                          <span className="font-mono">{importProgress}%</span>
+                        </div>
+                        <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-indigo-600 rounded-full transition-all duration-300"
+                            style={{ width: `${importProgress}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {importStatus === 'success' && (
+                      <div className="p-3.5 bg-emerald-50 border border-emerald-100 rounded-xl flex items-start gap-2.5 animate-fadeIn">
+                        <span className="text-emerald-500 text-base mt-0.5">✅</span>
+                        <div className="space-y-1">
+                          <span className="text-[10px] font-bold text-emerald-800 uppercase block">Importación Exitosa</span>
+                          <p className="text-[10px] text-emerald-700 leading-normal">{importResultText}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {importStatus === 'error' && (
+                      <div className="p-3.5 bg-red-50 border border-red-100 rounded-xl flex items-start gap-2.5 animate-fadeIn">
+                        <span className="text-red-500 text-base mt-0.5">⚠️</span>
+                        <div className="space-y-1">
+                          <span className="text-[10px] font-bold text-red-800 uppercase block">No se pudo importar</span>
+                          <p className="text-[10px] text-red-700 leading-normal">{importResultText}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex gap-2 pt-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowImportModal(false)}
+                        disabled={importing}
+                        className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer text-center"
+                      >
+                        {importStatus === 'success' ? 'Cerrar' : 'Cancelar'}
+                      </button>
+                      
+                      {importStatus !== 'success' && (
+                        <button
+                          type="button"
+                          onClick={handleImportForecasts}
+                          disabled={importing || !selectedSourceLeagueCode}
+                          className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:bg-slate-300 text-white rounded-xl text-xs font-bold transition-all shadow-md hover:shadow-lg cursor-pointer text-center"
+                        >
+                          {importing ? 'Importando...' : 'Confirmar Importación'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

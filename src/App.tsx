@@ -179,7 +179,14 @@ export default function App() {
             ? data.updatedAt.toDate().toISOString()
             : String(data.updatedAt);
         }
-        fData.push({ matchId: data.matchId, userId: data.userId, homeScore: Number(data.homeScore), awayScore: Number(data.awayScore), updatedAt: updatedAtStr });
+        fData.push({ 
+          matchId: data.matchId, 
+          userId: data.userId, 
+          homeScore: Number(data.homeScore), 
+          awayScore: Number(data.awayScore), 
+          updatedAt: updatedAtStr,
+          leagueCode: data.leagueCode || undefined
+        });
       });
 
       if (currentUser) {
@@ -187,17 +194,20 @@ export default function App() {
           for (let i = 0; i < localStorage.length; i++) {
             const key = localStorage.key(i);
             if (key?.startsWith(`offline_forecast_${currentUser.id}_`)) {
-              const matchId = key.replace(`offline_forecast_${currentUser.id}_`, '');
               const val = localStorage.getItem(key);
               if (val) {
                 const parsed = JSON.parse(val);
-                const idx = fData.findIndex(f => f.matchId === matchId && f.userId === currentUser.id);
+                const matchId = parsed.matchId || key.replace(`offline_forecast_${currentUser.id}_`, '');
+                const leagueCode = parsed.leagueCode || undefined;
+                const idx = fData.findIndex(f => f.matchId === matchId && f.userId === currentUser.id && f.leagueCode === leagueCode);
                 if (idx > -1) {
                   const st = fData[idx].updatedAt ? new Date(fData[idx].updatedAt).getTime() : 0;
                   const lt = parsed.updatedAt ? new Date(parsed.updatedAt).getTime() : 0;
-                  if (lt > st) fData[idx] = { matchId, userId: currentUser.id, homeScore: Number(parsed.homeScore), awayScore: Number(parsed.awayScore), updatedAt: parsed.updatedAt };
+                  if (lt > st) {
+                    fData[idx] = { matchId, userId: currentUser.id, homeScore: Number(parsed.homeScore), awayScore: Number(parsed.awayScore), updatedAt: parsed.updatedAt, leagueCode };
+                  }
                 } else {
-                  fData.push({ matchId, userId: currentUser.id, homeScore: Number(parsed.homeScore), awayScore: Number(parsed.awayScore), updatedAt: parsed.updatedAt });
+                  fData.push({ matchId, userId: currentUser.id, homeScore: Number(parsed.homeScore), awayScore: Number(parsed.awayScore), updatedAt: parsed.parsed.updatedAt || parsed.updatedAt, leagueCode });
                 }
               }
             }
@@ -249,11 +259,12 @@ export default function App() {
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
         if (key?.startsWith(`offline_forecast_${currentUser.id}_`)) {
-          const matchId = key.replace(`offline_forecast_${currentUser.id}_`, '');
           const val = localStorage.getItem(key);
           if (val) {
             const p = JSON.parse(val);
-            offline.push({ matchId, userId: currentUser.id, homeScore: Number(p.homeScore), awayScore: Number(p.awayScore), updatedAt: p.updatedAt });
+            const matchId = p.matchId || key.replace(`offline_forecast_${currentUser.id}_`, '');
+            const leagueCode = p.leagueCode || undefined;
+            offline.push({ matchId, userId: currentUser.id, homeScore: Number(p.homeScore), awayScore: Number(p.awayScore), updatedAt: p.updatedAt, leagueCode });
           }
         }
       }
@@ -261,7 +272,7 @@ export default function App() {
     if (offline.length > 0) {
       setForecasts(prev => {
         const merged = [...prev];
-        offline.forEach(o => { if (!prev.some(f => f.matchId === o.matchId && f.userId === o.userId)) merged.push(o); });
+        offline.forEach(o => { if (!prev.some(f => f.matchId === o.matchId && f.userId === o.userId && f.leagueCode === o.leagueCode)) merged.push(o); });
         return merged;
       });
     }
@@ -474,17 +485,39 @@ export default function App() {
       return;
     }
 
-    const forecastId = `${matchId}_${currentUser.id}`;
+    const leagueCode = currentLeague?.code;
+    const forecastId = leagueCode ? `${matchId}_${currentUser.id}_${leagueCode}` : `${matchId}_${currentUser.id}`;
     const nowIso = new Date().toISOString();
-    const localForecast: Forecast = { matchId, userId: currentUser.id, homeScore: Number(homeScore), awayScore: Number(awayScore), updatedAt: nowIso };
+    const localForecast: Forecast = { matchId, userId: currentUser.id, homeScore: Number(homeScore), awayScore: Number(awayScore), updatedAt: nowIso, leagueCode };
     setForecasts(prev => {
-      const idx = prev.findIndex(f => f.matchId === matchId && f.userId === currentUser.id);
+      const idx = prev.findIndex(f => f.matchId === matchId && f.userId === currentUser.id && f.leagueCode === leagueCode);
       if (idx > -1) { const next = [...prev]; next[idx] = localForecast; return next; }
       return [...prev, localForecast];
     });
-    try { localStorage.setItem(`offline_forecast_${currentUser.id}_${matchId}`, JSON.stringify({ homeScore: Number(homeScore), awayScore: Number(awayScore), updatedAt: nowIso })); } catch (_) {}
+
+    const localKey = leagueCode 
+      ? `offline_forecast_${currentUser.id}_${leagueCode}_${matchId}` 
+      : `offline_forecast_${currentUser.id}_${matchId}`;
+
+    try { 
+      localStorage.setItem(localKey, JSON.stringify({ 
+        matchId,
+        leagueCode,
+        homeScore: Number(homeScore), 
+        awayScore: Number(awayScore), 
+        updatedAt: nowIso 
+      })); 
+    } catch (_) {}
+
     try {
-      await setDoc(doc(db, 'forecasts', forecastId), { matchId, userId: currentUser.id, homeScore: Number(homeScore), awayScore: Number(awayScore), updatedAt: serverTimestamp() });
+      await setDoc(doc(db, 'forecasts', forecastId), { 
+        matchId, 
+        userId: currentUser.id, 
+        homeScore: Number(homeScore), 
+        awayScore: Number(awayScore), 
+        updatedAt: serverTimestamp(),
+        leagueCode: leagueCode || null
+      });
     } catch (err) { handleFirestoreError(err, OperationType.WRITE, `forecasts/${forecastId}`); }
   };
 
@@ -501,7 +534,10 @@ export default function App() {
   const handleResetData = async () => {
     try {
       for (const m of matches) await setDoc(doc(db, 'matches', m.id), { homeScore: undefined, awayScore: undefined, status: 'scheduled' }, { merge: true });
-      for (const f of forecasts) await deleteDoc(doc(db, 'forecasts', `${f.matchId}_${f.userId}`));
+      for (const f of forecasts) {
+        const id = f.leagueCode ? `${f.matchId}_${f.userId}_${f.leagueCode}` : `${f.matchId}_${f.userId}`;
+        await deleteDoc(doc(db, 'forecasts', id));
+      }
       try {
         const keys: string[] = [];
         for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k?.startsWith('offline_forecast_')) keys.push(k); }
@@ -645,7 +681,13 @@ export default function App() {
     const map = new Map<string, UserProfile>();
     users.forEach(u => { if (u?.id) map.set(u.id, u); });
     if (currentUser?.id) map.set(currentUser.id, currentUser);
-    forecasts.forEach(f => {
+
+    // Filter forecasts by active league
+    const activeForecasts = currentLeague 
+      ? forecasts.filter(f => f.leagueCode === currentLeague.code)
+      : forecasts;
+
+    activeForecasts.forEach(f => {
       if (f?.userId && f.userId !== 'undefined' && !map.has(f.userId)) {
         map.set(f.userId, { id: f.userId, name: f.userId === currentUser?.id ? currentUser.name : `Participante (${f.userId.substring(0,5)})`, avatar: f.userId === currentUser?.id ? currentUser.avatar : '👤' });
       }
@@ -659,7 +701,7 @@ export default function App() {
       let exact = 0, trend = 0, simple = 0, none = 0, total = 0, pending = 0;
       matches.forEach(match => {
         if (match.status === 'finished' && match.homeScore !== undefined && match.awayScore !== undefined) {
-          const f = forecasts.find(f => f.matchId === match.id && f.userId === user.id);
+          const f = activeForecasts.find(f => f.matchId === match.id && f.userId === user.id);
           if (f) {
             const r = calculateScore(match.homeScore, match.awayScore, f.homeScore, f.awayScore);
             total += r.score;
@@ -669,7 +711,7 @@ export default function App() {
             else none++;
           } else { none++; }
         } else {
-          if (forecasts.find(f => f.matchId === match.id && f.userId === user.id)) pending++;
+          if (activeForecasts.find(f => f.matchId === match.id && f.userId === user.id)) pending++;
         }
       });
       return { userId: user.id, userName: user.name, userAvatar: user.avatar, exactMatchesCount: exact, trendMatchesCount: trend, simpleMatchesCount: simple, noMatchesCount: none, totalPoints: total, pendingMatchesCount: pending };
@@ -683,7 +725,7 @@ export default function App() {
   const currentStats = calculateLeaderboardStats();
   const myRank = currentStats.findIndex(s => s.userId === currentUser?.id) + 1;
   const totalMatchesLoaded = matches.length;
-  const totalPredictionMade = matches.filter(m => forecasts.some(f => f.matchId === m.id && f.userId === currentUser?.id)).length;
+  const totalPredictionMade = matches.filter(m => forecasts.some(f => f.matchId === m.id && f.userId === currentUser?.id && (!currentLeague || f.leagueCode === currentLeague.code))).length;
 
   // ── Render guards ─────────────────────────────────────────
   if (!authReady) {
@@ -877,7 +919,7 @@ export default function App() {
         <div className="space-y-8">
           {activeTab === 'calendar' && (
             currentLeague ? (
-              <MatchesList matches={matches} forecasts={forecasts} currentUser={currentUser} allUsers={users} onSaveForecast={handleSaveForecast} onUpdateMatchResult={handleUpdateMatchResult} currentLeague={enrichedCurrentLeague} />
+              <MatchesList matches={matches} forecasts={forecasts} currentUser={currentUser} allUsers={users} onSaveForecast={handleSaveForecast} onUpdateMatchResult={handleUpdateMatchResult} currentLeague={enrichedCurrentLeague} allLeagues={leagues} />
             ) : (
               <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-8 text-center max-w-xl mx-auto space-y-4 my-8 animate-fadeIn">
                 <div className="w-16 h-16 bg-amber-50 border border-amber-200 text-amber-500 rounded-2xl flex items-center justify-center mx-auto text-3xl select-none animate-bounce">

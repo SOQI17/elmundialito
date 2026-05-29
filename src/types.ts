@@ -35,6 +35,7 @@ export interface Forecast {
   homeScore: number;
   awayScore: number;
   updatedAt: string;
+  leagueCode?: string;
 }
 
 export interface League {

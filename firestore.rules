@@ -81,7 +81,10 @@ service cloud.firestore {
       allow create: if isSignedIn() && 
                     isValidId(forecastId) &&
                     incoming().userId == request.auth.uid && 
-                    forecastId == (incoming().matchId + "_" + request.auth.uid) && 
+                    (
+                      forecastId == (incoming().matchId + "_" + request.auth.uid) ||
+                      (incoming().keys().hasAll(['leagueCode']) && forecastId == (incoming().matchId + "_" + request.auth.uid + "_" + incoming().leagueCode))
+                    ) && 
                     incoming().homeScore is int && 
                     incoming().awayScore is int &&
                     incoming().homeScore >= 0 && incoming().homeScore <= 99 &&
@@ -97,6 +100,10 @@ service cloud.firestore {
                     existing().userId == request.auth.uid && 
                     incoming().userId == request.auth.uid && 
                     incoming().matchId == existing().matchId && 
+                    (
+                      !existing().keys().hasAll(['leagueCode']) || 
+                      (incoming().keys().hasAll(['leagueCode']) && incoming().leagueCode == existing().leagueCode)
+                    ) &&
                     incoming().homeScore is int && 
                     incoming().awayScore is int &&
                     incoming().homeScore >= 0 && incoming().homeScore <= 99 &&
