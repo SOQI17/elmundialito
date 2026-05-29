@@ -62,6 +62,7 @@ export interface League {
   };
   gameMode?: GameModeType;
   customGroups?: CustomPhaseGroup[];
+  poolDistributionMode?: 'proportional' | 'full';
 }
 
 export interface LeagueMemberInfo {

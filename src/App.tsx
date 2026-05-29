@@ -584,7 +584,8 @@ export default function App() {
     bankConfig: League['bankConfig'], 
     costPerEntry: number,
     gameMode?: League['gameMode'],
-    customGroups?: League['customGroups']
+    customGroups?: League['customGroups'],
+    poolDistributionMode?: League['poolDistributionMode']
   ) => {
     if (!currentLeague) return;
     try {
@@ -592,7 +593,8 @@ export default function App() {
         bankConfig, 
         costPerEntry,
         gameMode: gameMode || 'total',
-        customGroups: customGroups || []
+        customGroups: customGroups || [],
+        poolDistributionMode: poolDistributionMode || 'proportional'
       }, { merge: true });
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, `leagues/${currentLeague.code}`);

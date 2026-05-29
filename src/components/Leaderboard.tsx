@@ -755,13 +755,19 @@ export default function Leaderboard({
         let activePoolShare = totalPool;
         let gameModeText = 'Acumulado Total';
         
+        const isFullDistribution = currentLeague.poolDistributionMode === 'full';
+        
         if (currentLeague.gameMode === 'sectional') {
-          activePoolShare = totalPool / 6;
-          gameModeText = 'Modo Seccional (Por Fase)';
+          if (!isFullDistribution) {
+            activePoolShare = totalPool / 6;
+          }
+          gameModeText = `Modo Seccional (Por Fase) - ${isFullDistribution ? 'Pozo Completo' : 'Pozo Dividido'}`;
         } else if (currentLeague.gameMode === 'custom' && currentLeague.customGroups && currentLeague.customGroups.length > 0) {
           const groupCount = currentLeague.customGroups.length;
-          activePoolShare = totalPool / groupCount;
-          gameModeText = 'Modo Elección (Grupos Personalizados)';
+          if (!isFullDistribution) {
+            activePoolShare = totalPool / groupCount;
+          }
+          gameModeText = `Modo Elección (Grupos) - ${isFullDistribution ? 'Pozo Completo' : 'Pozo Dividido'}`;
         }
 
         return (
@@ -788,13 +794,15 @@ export default function Leaderboard({
                 {currentLeague.gameMode && currentLeague.gameMode !== 'total' ? (
                   <>
                     <span className="text-[10px] text-amber-300 font-extrabold block uppercase tracking-wider">
-                      {currentLeague.gameMode === 'sectional' ? 'Pozo de esta Fase Activa' : 'Pozo del Grupo Activo'}
+                      {isFullDistribution ? 'Pozo Completo de la Ronda' : (currentLeague.gameMode === 'sectional' ? 'Pozo de esta Fase Activa' : 'Pozo del Grupo Activo')}
                     </span>
                     <span className="text-2xl font-black text-amber-400 font-mono">
                       ${activePoolShare.toFixed(2)} USD
                     </span>
-                    <span className="text-[9px] text-slate-300 block mt-0.5 font-medium">
-                      Pozo Total de la Liga: ${totalPool.toFixed(2)} USD ({currentLeague.members ? currentLeague.members.length : 0} part.)
+                    <span className="text-[9px] text-slate-350 block mt-0.5 font-medium">
+                      {isFullDistribution 
+                        ? `Aportes independientes por fase (Pozo total recaudado: $${totalPool.toFixed(2)} USD)` 
+                        : `Pozo Total de la Liga: $${totalPool.toFixed(2)} USD (${currentLeague.members ? currentLeague.members.length : 0} part.)`}
                     </span>
                   </>
                 ) : (

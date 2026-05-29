@@ -8,7 +8,8 @@ interface LeaguePaymentSettingsProps {
     bankConfig: League['bankConfig'], 
     costPerEntry: number, 
     gameMode?: League['gameMode'], 
-    customGroups?: League['customGroups']
+    customGroups?: League['customGroups'],
+    poolDistributionMode?: League['poolDistributionMode']
   ) => Promise<void>;
 }
 
@@ -46,6 +47,7 @@ export default function LeaguePaymentSettings({ league, onSaveSettings }: League
   // Game Mode States
   const [gameMode, setGameMode] = useState<League['gameMode']>(league.gameMode || 'total');
   const [customGroups, setCustomGroups] = useState<League['customGroups']>(league.customGroups || []);
+  const [poolDistributionMode, setPoolDistributionMode] = useState<League['poolDistributionMode']>(league.poolDistributionMode || 'proportional');
   const [newGroupName, setNewGroupName] = useState('');
   const [newGroupPhases, setNewGroupPhases] = useState<MatchPhase[]>([]);
 
@@ -53,7 +55,11 @@ export default function LeaguePaymentSettings({ league, onSaveSettings }: League
   const [success, setSuccess] = useState(false);
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
 
-  const autoSaveGameMode = async (newMode: League['gameMode'], newGroups: League['customGroups']) => {
+  const autoSaveGameMode = async (
+    newMode: League['gameMode'], 
+    newGroups: League['customGroups'], 
+    newDistMode?: League['poolDistributionMode']
+  ) => {
     setAutoSaveStatus('saving');
     try {
       const config = league.bankConfig || {
@@ -64,7 +70,7 @@ export default function LeaguePaymentSettings({ league, onSaveSettings }: League
         ownerId: ''
       };
       const cost = league.costPerEntry || 5;
-      await onSaveSettings(config, cost, newMode, newGroups);
+      await onSaveSettings(config, cost, newMode, newGroups, newDistMode || poolDistributionMode);
       setAutoSaveStatus('saved');
       setTimeout(() => setAutoSaveStatus('idle'), 3000);
     } catch (err) {
@@ -75,7 +81,12 @@ export default function LeaguePaymentSettings({ league, onSaveSettings }: League
 
   const handleGameModeChange = (mode: League['gameMode']) => {
     setGameMode(mode);
-    autoSaveGameMode(mode, customGroups);
+    autoSaveGameMode(mode, customGroups, poolDistributionMode);
+  };
+
+  const handleDistributionModeChange = (mode: League['poolDistributionMode']) => {
+    setPoolDistributionMode(mode);
+    autoSaveGameMode(gameMode, customGroups, mode);
   };
 
   const handleToggleNewGroupPhase = (phase: MatchPhase) => {
@@ -95,13 +106,13 @@ export default function LeaguePaymentSettings({ league, onSaveSettings }: League
     setCustomGroups(updated);
     setNewGroupName('');
     setNewGroupPhases([]);
-    autoSaveGameMode(gameMode, updated);
+    autoSaveGameMode(gameMode, updated, poolDistributionMode);
   };
 
   const handleRemoveCustomGroup = (id: string) => {
     const updated = (customGroups || []).filter(g => g.id !== id);
     setCustomGroups(updated);
-    autoSaveGameMode(gameMode, updated);
+    autoSaveGameMode(gameMode, updated, poolDistributionMode);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -121,7 +132,7 @@ export default function LeaguePaymentSettings({ league, onSaveSettings }: League
         ownerEmail: ownerEmail.trim() || undefined
       };
 
-      await onSaveSettings(config, Number(costPerEntry), gameMode, customGroups);
+      await onSaveSettings(config, Number(costPerEntry), gameMode, customGroups, poolDistributionMode);
       setSuccess(true);
       setTimeout(() => setSuccess(false), 4000);
     } catch (err) {
@@ -228,6 +239,61 @@ export default function LeaguePaymentSettings({ league, onSaveSettings }: League
             </div>
           </button>
         </div>
+
+        {/* Pool Distribution Mode Selector (Only shown if sectional or custom mode is selected) */}
+        {gameMode !== 'total' && (
+          <div className="border border-indigo-100 bg-indigo-50/10 rounded-xl p-4 space-y-3.5 animate-fadeIn">
+            <div>
+              <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5 select-none">
+                <DollarSign className="w-4 h-4 text-indigo-600" />
+                Modelo de Distribución del Pozo de Premios
+              </span>
+              <p className="text-[10px] text-slate-500 mt-0.5">
+                Define cómo se financia y reparte el dinero de las inscripciones entre los diferentes pozos en juego.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* Proportional Option */}
+              <button
+                type="button"
+                onClick={() => handleDistributionModeChange('proportional')}
+                className={`p-3 border rounded-xl flex items-start gap-2.5 text-left transition-all cursor-pointer active:scale-98 ${
+                  poolDistributionMode === 'proportional'
+                    ? 'border-indigo-500 bg-indigo-50/20 ring-1 ring-indigo-500'
+                    : 'border-slate-205 border-slate-200 hover:border-slate-300 bg-white'
+                }`}
+              >
+                <div className="w-1.5 h-1.5 rounded-full bg-indigo-600 mt-1 shrink-0" />
+                <div>
+                  <span className="text-[11px] font-black text-slate-800 block">Dividir Pozo (Aporte Único)</span>
+                  <span className="text-[9px] text-slate-500 leading-normal block mt-0.5">
+                    El pozo inicial se divide entre las fases (ej: pozo total $70 / 3 fases = $23.33 cada una).
+                  </span>
+                </div>
+              </button>
+
+              {/* Full Option */}
+              <button
+                type="button"
+                onClick={() => handleDistributionModeChange('full')}
+                className={`p-3 border rounded-xl flex items-start gap-2.5 text-left transition-all cursor-pointer active:scale-98 ${
+                  poolDistributionMode === 'full'
+                    ? 'border-indigo-500 bg-indigo-50/20 ring-1 ring-indigo-500'
+                    : 'border-slate-205 border-slate-200 hover:border-slate-300 bg-white'
+                }`}
+              >
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-600 mt-1 shrink-0" />
+                <div>
+                  <span className="text-[11px] font-black text-slate-800 block">Pozo Completo por Fase (Aportes Separados)</span>
+                  <span className="text-[9px] text-slate-500 leading-normal block mt-0.5">
+                    Cada fase tiene su propio pozo de premios completo (ej: $70 para grupos, $70 para octavos, etc.).
+                  </span>
+                </div>
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Custom Mode Creator UI */}
         {gameMode === 'custom' && (
