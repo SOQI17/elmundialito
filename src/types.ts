@@ -95,6 +95,7 @@ export interface UserStats {
   noMatchesCount: number; // 0 points
   totalPoints: number;
   pendingMatchesCount?: number;
+  predictionsMadeCount?: number;
 }
 
 export interface ScoringResult {

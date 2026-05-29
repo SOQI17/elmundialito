@@ -18,6 +18,8 @@ interface MatchesListProps {
   ) => void;
   currentLeague?: League | null;
   allLeagues?: League[];
+  activePhase: MatchPhase;
+  onChangePhase: (phase: MatchPhase) => void;
 }
 
 const PHASES_LABELS: Record<MatchPhase, string> = {
@@ -53,9 +55,10 @@ export default function MatchesList({
   onSaveForecast,
   onUpdateMatchResult,
   currentLeague,
-  allLeagues = []
+  allLeagues = [],
+  activePhase,
+  onChangePhase
 }: MatchesListProps) {
-  const [activePhase, setActivePhase] = useState<MatchPhase>('group');
   const [activeGroupFilter, setActiveGroupFilter] = useState<string>('all');
   const [activeDateFilter, setActiveDateFilter] = useState<string>('all');
   const [expandedMatchId, setExpandedMatchId] = useState<string | null>(null);
@@ -138,12 +141,13 @@ export default function MatchesList({
     const dayMatches = matches.filter(m => m.phase === activePhase && getLocalDateStr(m.dateTime) === dateStr);
     return {
       totalCount: dayMatches.length,
-      predictedCount: dayMatches.filter(m => forecasts.some(f => f.matchId === m.id && f.userId === currentUser.id && (!currentLeague || f.leagueCode === currentLeague.code))).length
+      predictedCount: dayMatches.filter(m => forecasts.some(f => f.matchId === m.id && f.userId === currentUser.id && (!currentLeague || f.leagueCode === currentLeague.code || !f.leagueCode))).length
     };
   };
 
   const getMyForecast = (matchId: string): Forecast | undefined =>
-    forecasts.find(f => f.matchId === matchId && f.userId === currentUser.id && (!currentLeague || f.leagueCode === currentLeague.code));
+    forecasts.find(f => f.matchId === matchId && f.userId === currentUser.id && currentLeague && f.leagueCode === currentLeague.code) ||
+    forecasts.find(f => f.matchId === matchId && f.userId === currentUser.id && !f.leagueCode);
 
   const handleScoreChange = (matchId: string, team: 'home' | 'away', currentVal: number, step: number) => {
     const forecast = getMyForecast(matchId);
@@ -308,19 +312,69 @@ export default function MatchesList({
       })()}
 
       {/* Phase tabs */}
-      <div className="flex flex-wrap gap-1.5 p-1 bg-slate-50 rounded-xl" id="phase-tabs-container">
-        {(['group', 'dieciseisavos', 'octavos', 'cuartos', 'semifinal', 'final'] as MatchPhase[]).map((phase) => (
-          <button
-            key={phase}
-            onClick={() => { setActivePhase(phase); setActiveGroupFilter('all'); setActiveDateFilter('all'); }}
-            className={`flex-1 min-w-[100px] text-center px-3 py-2 text-xs font-bold rounded-lg transition-all ${
-              activePhase === phase ? 'bg-white text-slate-900 shadow-xs border border-slate-150' : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
-            }`}
-          >
-            {PHASES_LABELS[phase]}
-          </button>
-        ))}
-      </div>
+      {(() => {
+        const modeActiveTabStyle = (() => {
+          const mode = currentLeague?.gameMode || 'total';
+          if (mode === 'sectional') {
+            return {
+              active: 'bg-emerald-600 text-white shadow-md border-emerald-600',
+              badge: 'bg-emerald-500/80 text-white',
+              inactiveBadge: 'bg-slate-200/80 text-slate-700'
+            };
+          }
+          if (mode === 'custom') {
+            return {
+              active: 'bg-purple-600 text-white shadow-md border-purple-600',
+              badge: 'bg-purple-500/80 text-white',
+              inactiveBadge: 'bg-slate-200/80 text-slate-700'
+            };
+          }
+          return {
+            active: 'bg-indigo-600 text-white shadow-md border-indigo-600',
+            badge: 'bg-indigo-500/80 text-white',
+            inactiveBadge: 'bg-slate-200/80 text-slate-700'
+          };
+        })();
+
+        return (
+          <div className="flex flex-wrap gap-1.5 p-1 bg-slate-50 rounded-xl" id="phase-tabs-container">
+            {(['group', 'dieciseisavos', 'octavos', 'cuartos', 'semifinal', 'final'] as MatchPhase[]).map((phase) => {
+              const phaseMatches = matches.filter(m => m.phase === phase);
+              const totalCount = phaseMatches.length;
+              const predictedCount = phaseMatches.filter(m => forecasts.some(f => f.matchId === m.id && f.userId === currentUser.id && (!currentLeague || f.leagueCode === currentLeague.code || !f.leagueCode))).length;
+              const isActive = activePhase === phase;
+
+              return (
+                <button
+                  key={phase}
+                  onClick={() => { onChangePhase(phase); setActiveGroupFilter('all'); setActiveDateFilter('all'); }}
+                  className={`flex-1 min-w-[110px] sm:min-w-[130px] text-center px-2 py-2 rounded-lg transition-all border active:scale-98 cursor-pointer flex flex-col items-center justify-center gap-1 ${
+                    isActive 
+                      ? `${modeActiveTabStyle.active}` 
+                      : 'bg-white border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                  }`}
+                >
+                  <span className="text-[11px] font-extrabold leading-none">{PHASES_LABELS[phase]}</span>
+                  {!currentUser.isAdmin && totalCount > 0 && (
+                    <span className={`px-1.5 py-0.5 rounded-md text-[9px] font-bold font-mono transition-colors leading-none ${
+                      isActive ? modeActiveTabStyle.badge : modeActiveTabStyle.inactiveBadge
+                    }`}>
+                      {predictedCount}/{totalCount}
+                    </span>
+                  )}
+                  {currentUser.isAdmin && totalCount > 0 && (
+                    <span className={`px-1.5 py-0.5 rounded-md text-[9px] font-bold font-mono transition-colors leading-none ${
+                      isActive ? modeActiveTabStyle.badge : modeActiveTabStyle.inactiveBadge
+                    }`}>
+                      {totalCount} partidos
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        );
+      })()}
 
       {/* Filters */}
       <div className="flex flex-col gap-4 border-t border-slate-100 pt-4">
@@ -437,13 +491,28 @@ export default function MatchesList({
                       const isPendingValue = hasDraft && (!userForecast || userForecast.homeScore !== draft.homeScore || userForecast.awayScore !== draft.awayScore);
                       const displayHomeScore = hasDraft ? draft.homeScore : (userForecast ? userForecast.homeScore : undefined);
                       const displayAwayScore = hasDraft ? draft.awayScore : (userForecast ? userForecast.awayScore : undefined);
-                      const otherForecasts = forecasts.filter(f => {
+                      const otherForecasts = (() => {
+                        const raw = forecasts.filter(f => {
                           if (f.matchId !== match.id || f.userId === currentUser.id) return false;
                           if (currentLeague) {
-                            return (currentLeague.members || []).includes(f.userId) && f.leagueCode === currentLeague.code;
+                            return (currentLeague.members || []).includes(f.userId) && (f.leagueCode === currentLeague.code || !f.leagueCode);
                           }
                           return true;
                         });
+
+                        const map = new Map<string, typeof forecasts[0]>();
+                        raw.forEach(f => {
+                          const existing = map.get(f.userId);
+                          if (!existing) {
+                            map.set(f.userId, f);
+                          } else {
+                            if (f.leagueCode && !existing.leagueCode) {
+                              map.set(f.userId, f);
+                            }
+                          }
+                        });
+                        return Array.from(map.values());
+                      })();
 
                       return (
                         <div
@@ -659,7 +728,7 @@ export default function MatchesList({
                                     if (!userProfile) return null;
                                     const showFriendlyResult = isPlayed;
                                     const pointsResult = isPlayed ? getScoreBadge(match, f) : null;
-                                    const scoreMasked = !locked;
+                                    const scoreMasked = false; // Se muestran siempre en abierto a petición del usuario
                                     return (
                                       <div key={f.userId} className="p-3 bg-white rounded-xl border border-slate-200 flex items-center justify-between gap-2 shadow-xs">
                                         <div className="flex items-center gap-2">
@@ -672,13 +741,7 @@ export default function MatchesList({
                                           </div>
                                         </div>
                                         <div className="text-right flex flex-col items-end">
-                                          {scoreMasked ? (
-                                            <span className="px-2 py-0.5 bg-slate-100 text-slate-500 font-semibold text-[10px] rounded-md flex items-center gap-1.5">
-                                              <Lock className="w-3 h-3 text-slate-400" /> Oculto
-                                            </span>
-                                          ) : (
-                                            <div className="font-mono text-xs bg-slate-900 text-white px-2 py-1 rounded font-bold">{f.homeScore} - {f.awayScore}</div>
-                                          )}
+                                          <div className="font-mono text-xs bg-slate-900 text-white px-2 py-1 rounded font-bold">{f.homeScore} - {f.awayScore}</div>
                                           {showFriendlyResult && pointsResult && (
                                             <span className={`inline-block text-[9px] font-bold mt-1 px-1.5 rounded ${pointsResult.badgeColor}`}>+{pointsResult.points} pts</span>
                                           )}

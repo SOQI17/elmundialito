@@ -11,6 +11,8 @@ interface LeaderboardProps {
   forecasts?: Forecast[];
   users?: UserProfile[];
   currentLeague?: League | null;
+  activePhase?: MatchPhase;
+  onChangePhase?: (phase: MatchPhase) => void;
 }
 
 export default function Leaderboard({ 
@@ -19,7 +21,9 @@ export default function Leaderboard({
   matches = [],
   forecasts = [],
   users = [],
-  currentLeague = null
+  currentLeague = null,
+  activePhase,
+  onChangePhase
 }: LeaderboardProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeDateFilter, setActiveDateFilter] = useState<string>('all');
@@ -28,8 +32,14 @@ export default function Leaderboard({
 
   // Active pool ID (sectional phase or custom group id)
   const [activePoolId, setActivePoolId] = useState<string>(() => {
-    if (currentLeague?.gameMode === 'sectional') return 'group';
+    if (currentLeague?.gameMode === 'sectional') {
+      return activePhase || 'group';
+    }
     if (currentLeague?.gameMode === 'custom' && currentLeague.customGroups && currentLeague.customGroups.length > 0) {
+      if (activePhase) {
+        const matchingGroup = currentLeague.customGroups.find(g => g.phases.includes(activePhase));
+        if (matchingGroup) return matchingGroup.id;
+      }
       return currentLeague.customGroups[0].id;
     }
     return 'total';
@@ -37,13 +47,20 @@ export default function Leaderboard({
 
   React.useEffect(() => {
     if (currentLeague?.gameMode === 'sectional') {
-      setActivePoolId('group');
+      setActivePoolId(activePhase || 'group');
     } else if (currentLeague?.gameMode === 'custom' && currentLeague.customGroups && currentLeague.customGroups.length > 0) {
+      if (activePhase) {
+        const matchingGroup = currentLeague.customGroups.find(g => g.phases.includes(activePhase));
+        if (matchingGroup) {
+          setActivePoolId(matchingGroup.id);
+          return;
+        }
+      }
       setActivePoolId(currentLeague.customGroups[0].id);
     } else {
       setActivePoolId('total');
     }
-  }, [currentLeague?.code, currentLeague?.gameMode]);
+  }, [currentLeague?.code, currentLeague?.gameMode, activePhase]);
 
   // Selected pool matches
   const poolMatches = React.useMemo(() => {
@@ -61,6 +78,83 @@ export default function Leaderboard({
     }
     return matches;
   }, [matches, currentLeague, activePoolId]);
+
+  // Info del siguiente pozo si el actual terminó
+  const nextPoolInfo = React.useMemo(() => {
+    if (!currentLeague || !currentLeague.gameMode || poolMatches.length === 0) return null;
+    
+    // Check if ALL matches in the current pool have status === 'finished'
+    const isFinished = poolMatches.every(m => m.status === 'finished');
+    if (!isFinished) return null;
+    
+    if (currentLeague.gameMode === 'sectional') {
+      const phasesOrder: MatchPhase[] = ['group', 'dieciseisavos', 'octavos', 'cuartos', 'semifinal', 'final'];
+      const currentIndex = phasesOrder.indexOf(activePoolId as MatchPhase);
+      
+      if (currentIndex !== -1 && currentIndex < phasesOrder.length - 1) {
+        const nextPhase = phasesOrder[currentIndex + 1];
+        // Check if there are matches in that next phase to ensure it has data
+        const nextPhaseMatches = matches.filter(m => m.phase === nextPhase);
+        if (nextPhaseMatches.length === 0) return null;
+        
+        const nextPhaseLabels: Record<MatchPhase, string> = {
+          group: 'Fase de Grupos',
+          dieciseisavos: 'Dieciseisavos de Final',
+          octavos: 'Octavos de Final',
+          cuartos: 'Cuartos de Final',
+          semifinal: 'Semifinal',
+          final: 'Gran Final'
+        };
+        const currentPhaseLabels: Record<MatchPhase, string> = {
+          group: 'Fase de Grupos',
+          dieciseisavos: 'Dieciseisavos',
+          octavos: 'Octavos de Final',
+          cuartos: 'Cuartos de Final',
+          semifinal: 'Semifinal',
+          final: 'Gran Final'
+        };
+        return {
+          nextId: nextPhase,
+          nextName: nextPhaseLabels[nextPhase],
+          currentName: currentPhaseLabels[activePoolId as MatchPhase] || activePoolId
+        };
+      }
+    }
+    
+    if (currentLeague.gameMode === 'custom' && currentLeague.customGroups) {
+      const currentIndex = currentLeague.customGroups.findIndex(g => g.id === activePoolId);
+      
+      if (currentIndex !== -1 && currentIndex < currentLeague.customGroups.length - 1) {
+        const currentGroup = currentLeague.customGroups[currentIndex];
+        const nextGroup = currentLeague.customGroups[currentIndex + 1];
+        
+        return {
+          nextId: nextGroup.id,
+          nextName: nextGroup.name,
+          currentName: currentGroup.name
+        };
+      }
+    }
+    
+    return null;
+  }, [matches, poolMatches, currentLeague, activePoolId]);
+
+  const handleStartNextPool = () => {
+    if (nextPoolInfo) {
+      setActivePoolId(nextPoolInfo.nextId);
+      setActiveDateFilter('all');
+      if (onChangePhase) {
+        if (currentLeague?.gameMode === 'sectional') {
+          onChangePhase(nextPoolInfo.nextId as MatchPhase);
+        } else if (currentLeague?.gameMode === 'custom' && currentLeague.customGroups) {
+          const nextGroup = currentLeague.customGroups.find(g => g.id === nextPoolInfo.nextId);
+          if (nextGroup && nextGroup.phases.length > 0) {
+            onChangePhase(nextGroup.phases[0]);
+          }
+        }
+      }
+    }
+  };
 
   const getLocalDateStr = (dateStr: string) => {
     const d = new Date(dateStr);
@@ -162,11 +256,16 @@ export default function Leaderboard({
       let noMatchesCount = 0;
       let totalPoints = 0;
       let pendingMatchesCount = 0;
+      let predictionsMadeCount = 0;
 
       targetMatches.forEach((match) => {
+        const forecast = forecasts.find(f => f.matchId === match.id && f.userId === user.id && (!currentLeague || f.leagueCode === currentLeague.code));
+        
+        if (forecast) {
+          predictionsMadeCount++;
+        }
+
         if (match.status === 'finished' && match.homeScore !== undefined && match.awayScore !== undefined) {
-          const forecast = forecasts.find(f => f.matchId === match.id && f.userId === user.id && (!currentLeague || f.leagueCode === currentLeague.code));
-          
           if (forecast) {
             const result = calculateScore(match.homeScore, match.awayScore, forecast.homeScore, forecast.awayScore);
             totalPoints += result.score;
@@ -179,7 +278,6 @@ export default function Leaderboard({
             noMatchesCount++;
           }
         } else {
-          const forecast = forecasts.find(f => f.matchId === match.id && f.userId === user.id && (!currentLeague || f.leagueCode === currentLeague.code));
           if (forecast) {
             pendingMatchesCount++;
           }
@@ -195,7 +293,8 @@ export default function Leaderboard({
         simpleMatchesCount,
         noMatchesCount,
         totalPoints,
-        pendingMatchesCount
+        pendingMatchesCount,
+        predictionsMadeCount
       };
     });
 
@@ -316,8 +415,8 @@ export default function Leaderboard({
             {currentLeague.gameMode === 'sectional' ? (
               // Sectional Phases
               (['group', 'dieciseisavos', 'octavos', 'cuartos', 'semifinal', 'final'] as MatchPhase[]).map((phase) => {
-                const finishedCount = matches.filter(m => m.phase === phase && m.status === 'finished').length;
                 const totalCount = matches.filter(m => m.phase === phase).length;
+                const predictedCount = matches.filter(m => m.phase === phase && forecasts.some(f => f.matchId === m.id && f.userId === currentUser.id && f.leagueCode === currentLeague.code)).length;
                 const isActive = activePoolId === phase;
                 
                 const labels: Record<MatchPhase, string> = {
@@ -335,16 +434,17 @@ export default function Leaderboard({
                     onClick={() => {
                       setActivePoolId(phase);
                       setActiveDateFilter('all');
+                      if (onChangePhase) onChangePhase(phase);
                     }}
                     className={`px-3 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 border active:scale-95 ${
                       isActive
-                        ? 'bg-indigo-650 bg-indigo-600 border-indigo-600 text-white shadow-sm font-black'
-                        : 'bg-white border-slate-205 border-slate-200 text-slate-700 hover:bg-slate-100 hover:text-slate-900 font-bold'
+                        ? 'bg-emerald-600 border-emerald-600 text-white shadow-sm font-black'
+                        : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100 hover:text-slate-900 font-bold'
                     }`}
                   >
                     <span>{labels[phase]}</span>
-                    <span className={`px-1.5 py-0.5 rounded-md text-[9px] font-mono font-bold ${isActive ? 'bg-indigo-500 text-indigo-100' : 'bg-slate-100 text-slate-500'}`}>
-                      {finishedCount}/{totalCount}
+                    <span className={`px-1.5 py-0.5 rounded-md text-[9px] font-mono font-bold transition-colors ${isActive ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                      {predictedCount}/{totalCount}
                     </span>
                   </button>
                 );
@@ -352,8 +452,8 @@ export default function Leaderboard({
             ) : (
               // Custom Phase Groups
               (currentLeague.customGroups || []).map((group) => {
-                const finishedCount = matches.filter(m => group.phases.includes(m.phase) && m.status === 'finished').length;
                 const totalCount = matches.filter(m => group.phases.includes(m.phase)).length;
+                const predictedCount = matches.filter(m => group.phases.includes(m.phase) && forecasts.some(f => f.matchId === m.id && f.userId === currentUser.id && f.leagueCode === currentLeague.code)).length;
                 const isActive = activePoolId === group.id;
 
                 return (
@@ -362,22 +462,61 @@ export default function Leaderboard({
                     onClick={() => {
                       setActivePoolId(group.id);
                       setActiveDateFilter('all');
+                      if (onChangePhase && group.phases.length > 0) {
+                        onChangePhase(group.phases[0]);
+                      }
                     }}
                     className={`px-3.5 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-2 border active:scale-95 ${
                       isActive
-                        ? 'bg-indigo-650 bg-indigo-600 border-indigo-600 text-white shadow-sm font-black'
-                        : 'bg-white border-slate-205 border-slate-200 text-slate-700 hover:bg-slate-100 hover:text-slate-900 font-bold'
+                        ? 'bg-purple-600 border-purple-600 text-white shadow-sm font-black'
+                        : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100 hover:text-slate-900 font-bold'
                     }`}
                   >
                     <span>{group.name}</span>
-                    <span className={`px-1.5 py-0.5 rounded-md text-[9px] font-mono font-bold ${isActive ? 'bg-indigo-500 text-indigo-100' : 'bg-slate-100 text-slate-500'}`}>
-                      {finishedCount}/{totalCount}
+                    <span className={`px-1.5 py-0.5 rounded-md text-[9px] font-mono font-bold transition-colors ${isActive ? 'bg-purple-500 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                      {predictedCount}/{totalCount}
                     </span>
                   </button>
                 );
               })
             )}
           </div>
+        </div>
+      )}
+
+      {/* Banner de Siguiente Pozo */}
+      {nextPoolInfo && (
+        <div className={`p-4 rounded-2xl border text-white shadow-md animate-fadeIn flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 transition-all ${
+          currentLeague.gameMode === 'sectional'
+            ? 'bg-gradient-to-r from-emerald-900 via-teal-950 to-slate-900 border-emerald-500/20'
+            : 'bg-gradient-to-r from-purple-900 via-fuchsia-950 to-slate-900 border-purple-500/20'
+        }`}>
+          <div className="flex items-start gap-3">
+            <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center text-lg shadow-inner shrink-0 select-none animate-pulse">
+              🎉
+            </div>
+            <div>
+              <span className="text-[10px] font-black uppercase tracking-wider text-slate-350 block">
+                ¡{nextPoolInfo.currentName} Finalizado!
+              </span>
+              <p className="text-xs font-bold text-slate-100 mt-0.5">
+                Todos los partidos de este pozo han terminado. ¿Listo para la siguiente ronda?
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleStartNextPool}
+            className={`w-full sm:w-auto px-4 py-2.5 font-black text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-md transform hover:scale-[1.02] active:scale-[0.98] ${
+              currentLeague.gameMode === 'sectional'
+                ? 'bg-emerald-500 hover:bg-emerald-600 text-white hover:shadow-emerald-500/20'
+                : 'bg-purple-500 hover:bg-purple-600 text-white hover:shadow-purple-500/20'
+            }`}
+          >
+            <span>Iniciar siguiente pozo: {nextPoolInfo.nextName}</span>
+            <span className="text-sm font-black">→</span>
+          </button>
         </div>
       )}
 
@@ -587,10 +726,19 @@ export default function Leaderboard({
                     <span title="Acierto Simple (1pt)" className="text-blue-600">⚽ {userStat.simpleMatchesCount}</span>
                   </div>
 
-                  {userStat.pendingMatchesCount !== undefined && userStat.pendingMatchesCount > 0 && (
-                    <div className="pt-1.5 border-t border-slate-100 flex items-center justify-center gap-1 text-[9px] font-black uppercase text-amber-700 tracking-wider animate-pulse">
-                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping"></span>
-                      <span>⏳ {userStat.pendingMatchesCount} apuestas pendientes</span>
+                  {userStat.predictionsMadeCount !== undefined && (
+                    <div className="pt-1.5 border-t border-slate-100 flex flex-col items-center justify-center gap-0.5">
+                      <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Apuestas Registradas</span>
+                      <span className={`text-xs font-mono font-extrabold ${
+                        userStat.predictionsMadeCount === poolMatches.length ? 'text-emerald-600' : 'text-slate-700'
+                      }`}>
+                        {userStat.predictionsMadeCount} / {poolMatches.length}
+                      </span>
+                      {userStat.predictionsMadeCount < poolMatches.length && (
+                        <span className="text-[8px] font-extrabold text-rose-600 animate-pulse">
+                          ⚠️ Faltan {poolMatches.length - userStat.predictionsMadeCount} apuestas
+                        </span>
+                      )}
                     </div>
                   )}
                 </div>
@@ -601,91 +749,121 @@ export default function Leaderboard({
       )}
 
       {/* Distribución del Pozo de Premios de la Liga */}
-      {currentLeague && (
-        <div className="bg-gradient-to-tr from-indigo-900 via-indigo-950 to-slate-900 rounded-2xl p-6 text-white border border-indigo-500/30 shadow-lg space-y-5" id="prize-pool-distributor">
-          
-          {/* Header of Prize Pool */}
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-indigo-500/20 pb-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center">
-                <Coins className="w-5 h-5 text-amber-400 animate-bounce" />
+      {currentLeague && (() => {
+        const totalPool = (currentLeague.members ? currentLeague.members.length : 0) * (currentLeague.costPerEntry || 0);
+        
+        let activePoolShare = totalPool;
+        let gameModeText = 'Acumulado Total';
+        
+        if (currentLeague.gameMode === 'sectional') {
+          activePoolShare = totalPool / 6;
+          gameModeText = 'Modo Seccional (Por Fase)';
+        } else if (currentLeague.gameMode === 'custom' && currentLeague.customGroups && currentLeague.customGroups.length > 0) {
+          const groupCount = currentLeague.customGroups.length;
+          activePoolShare = totalPool / groupCount;
+          gameModeText = 'Modo Elección (Grupos Personalizados)';
+        }
+
+        return (
+          <div className="bg-gradient-to-tr from-indigo-900 via-indigo-950 to-slate-900 rounded-2xl p-6 text-white border border-indigo-500/30 shadow-lg space-y-5" id="prize-pool-distributor">
+            
+            {/* Header of Prize Pool */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-indigo-500/20 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center">
+                  <Coins className="w-5 h-5 text-amber-400 animate-bounce" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black uppercase tracking-wider text-indigo-200">
+                    Pozo de Premios ({currentLeague.name})
+                  </h3>
+                  <p className="text-[10px] text-indigo-300 font-semibold mt-0.5">
+                    Distribución Equilibrada (60% / 25% / 15%) en base a: <span className="text-amber-400 font-bold">{gameModeText}</span>
+                  </p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-sm font-black uppercase tracking-wider text-indigo-350 text-indigo-200">
-                  Pozo Acumulado de la Liga ({currentLeague.name})
-                </h3>
-                <p className="text-[10px] text-indigo-300 font-semibold mt-0.5">
-                  Reparto Profesional Equilibrado (60% / 25% / 15%) según clasificación activa en vivo.
-                </p>
+
+              {/* Total collected metric */}
+              <div className="text-right">
+                {currentLeague.gameMode && currentLeague.gameMode !== 'total' ? (
+                  <>
+                    <span className="text-[10px] text-amber-300 font-extrabold block uppercase tracking-wider">
+                      {currentLeague.gameMode === 'sectional' ? 'Pozo de esta Fase Activa' : 'Pozo del Grupo Activo'}
+                    </span>
+                    <span className="text-2xl font-black text-amber-400 font-mono">
+                      ${activePoolShare.toFixed(2)} USD
+                    </span>
+                    <span className="text-[9px] text-slate-300 block mt-0.5 font-medium">
+                      Pozo Total de la Liga: ${totalPool.toFixed(2)} USD ({currentLeague.members ? currentLeague.members.length : 0} part.)
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-xs text-indigo-300 font-bold block uppercase tracking-wider">Pozo Total Recaudado</span>
+                    <span className="text-2xl font-black text-amber-400 font-mono">
+                      ${totalPool.toFixed(2)} USD
+                    </span>
+                    <span className="text-[9px] text-slate-300 block mt-0.5">
+                      {currentLeague.members ? currentLeague.members.length : 0} participantes × ${currentLeague.costPerEntry || 0}.00 USD
+                    </span>
+                  </>
+                )}
               </div>
             </div>
 
-            {/* Total collected metric */}
-            <div className="text-right">
-              <span className="text-xs text-indigo-300 font-bold block uppercase tracking-wider">Pozo Total Recaudado</span>
-              <span className="text-2xl font-black text-amber-400 font-mono">
-                ${(currentLeague.members ? currentLeague.members.length : 0) * (currentLeague.costPerEntry || 0)}.00 USD
-              </span>
-              <span className="text-[9px] text-slate-300 block mt-0.5">
-                {currentLeague.members ? currentLeague.members.length : 0} participantes × ${currentLeague.costPerEntry || 0}.00 USD
-              </span>
+            {/* Podiums Awards Mapping */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {(() => {
+                // Percentages for the balanced distribution
+                const splits = [
+                  { percent: 0.60, label: '🥇 1er Puesto (Campeón)', share: 0.60 * activePoolShare, textCol: 'text-amber-400', borderCol: 'border-amber-500/40 bg-amber-500/5' },
+                  { percent: 0.25, label: '🥈 2do Puesto (Subcampeón)', share: 0.25 * activePoolShare, textCol: 'text-slate-300', borderCol: 'border-slate-550 border-slate-500/30 bg-slate-500/5' },
+                  { percent: 0.15, label: '🥉 3er Puesto (Consolación)', share: 0.15 * activePoolShare, textCol: 'text-amber-500', borderCol: 'border-amber-700/30 bg-amber-700/5' }
+                ];
+
+                return splits.map((item, idx) => {
+                  // Get member currently in this position
+                  const leader = podiumList[idx];
+
+                  return (
+                    <div key={idx} className={`rounded-xl border p-4 flex flex-col justify-between ${item.borderCol} transition-all hover:scale-[1.01]`}>
+                      <div className="flex justify-between items-start">
+                        <span className="text-[10px] font-black uppercase text-indigo-300 tracking-wider">
+                          {item.label}
+                        </span>
+                        <span className="text-[10px] font-black bg-indigo-500/20 px-2 py-0.5 rounded-full text-indigo-200">
+                          {item.percent * 100}%
+                        </span>
+                      </div>
+
+                      <div className="my-4 flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-indigo-950 border border-indigo-850 flex items-center justify-center text-xl shadow-inner shrink-0 select-none">
+                          {leader ? leader.userAvatar : '👤'}
+                        </div>
+                        <div className="min-w-0">
+                          <span className="text-xs font-black block truncate text-slate-100">
+                            {leader ? leader.userName : 'Esperando participante...'}
+                          </span>
+                          <span className="text-[9px] text-indigo-300 block mt-0.5 font-semibold">
+                            {leader ? `${leader.totalPoints} Pts obtenidos` : 'Posición no definida'}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="pt-3 border-t border-indigo-500/10 flex justify-between items-baseline">
+                        <span className="text-[9px] text-indigo-300 font-bold uppercase">Premio Asignado</span>
+                        <span className={`text-lg font-black font-mono ${item.textCol}`}>
+                          ${item.share.toFixed(2)} USD
+                        </span>
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
             </div>
           </div>
-
-          {/* Podiums Awards Mapping */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {(() => {
-              const totalPool = (currentLeague.members ? currentLeague.members.length : 0) * (currentLeague.costPerEntry || 0);
-              
-              // Percentages for the balanced distribution
-              const splits = [
-                { percent: 0.60, label: '🥇 1er Puesto (Campeón)', share: 0.60 * totalPool, textCol: 'text-amber-450 text-amber-400', borderCol: 'border-amber-500/40 bg-amber-500/5' },
-                { percent: 0.25, label: '🥈 2do Puesto (Subcampeón)', share: 0.25 * totalPool, textCol: 'text-slate-300', borderCol: 'border-slate-550 border-slate-500/30 bg-slate-500/5' },
-                { percent: 0.15, label: '🥉 3er Puesto (Consolación)', share: 0.15 * totalPool, textCol: 'text-amber-500', borderCol: 'border-amber-700/30 bg-amber-700/5' }
-              ];
-
-              return splits.map((item, idx) => {
-                // Get member currently in this position
-                const leader = podiumList[idx];
-
-                return (
-                  <div key={idx} className={`rounded-xl border p-4 flex flex-col justify-between ${item.borderCol} transition-all hover:scale-[1.01]`}>
-                    <div className="flex justify-between items-start">
-                      <span className="text-[10px] font-black uppercase text-indigo-300 tracking-wider">
-                        {item.label}
-                      </span>
-                      <span className="text-[10px] font-black bg-indigo-500/20 px-2 py-0.5 rounded-full text-indigo-200">
-                        {item.percent * 100}%
-                      </span>
-                    </div>
-
-                    <div className="my-4 flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-indigo-950 border border-indigo-850 flex items-center justify-center text-xl shadow-inner shrink-0 select-none">
-                        {leader ? leader.userAvatar : '👤'}
-                      </div>
-                      <div className="min-w-0">
-                        <span className="text-xs font-black block truncate text-slate-100">
-                          {leader ? leader.userName : 'Esperando participante...'}
-                        </span>
-                        <span className="text-[9px] text-indigo-300 block mt-0.5 font-semibold">
-                          {leader ? `${leader.totalPoints} Pts obtenidos` : 'Posición no definida'}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="pt-3 border-t border-indigo-500/10 flex justify-between items-baseline">
-                      <span className="text-[9px] text-indigo-300 font-bold uppercase">Premio Asignado</span>
-                      <span className={`text-lg font-black font-mono ${item.textCol}`}>
-                        ${item.share.toFixed(2)} USD
-                      </span>
-                    </div>
-                  </div>
-                );
-              });
-            })()}
-          </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Remainder list render as table */}
       <div className="border border-slate-100 rounded-2xl overflow-hidden shadow-xs" id="leaderboard-grid-view">
@@ -699,7 +877,7 @@ export default function Leaderboard({
                 <th className="py-3.5 px-4 text-center">📈 Ac. Tendencia (2p)</th>
                 <th className="py-3.5 px-4 text-center">⚽ Ac. Simples (1p)</th>
                 <th className="py-3.5 px-4 text-center">❌ Errores (0p)</th>
-                <th className="py-3.5 px-4 text-center">⏳ Apuestas Pendientes</th>
+                <th className="py-3.5 px-4 text-center">📋 Pronósticos Realizados</th>
                 <th className="py-3.5 px-4 text-right pr-6">Puntaje Total</th>
               </tr>
             </thead>
@@ -757,14 +935,23 @@ export default function Leaderboard({
                         {userStat.noMatchesCount}
                       </td>
                       <td className="py-3 px-4 text-center">
-                        {userStat.pendingMatchesCount && userStat.pendingMatchesCount > 0 ? (
-                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-700 font-bold font-mono text-[10px]">
-                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping"></span>
-                            <span>⏳ {userStat.pendingMatchesCount} pend.</span>
+                        <div className="flex flex-col items-center justify-center gap-1">
+                          <span className={`font-mono font-extrabold text-[12px] ${
+                            userStat.predictionsMadeCount === poolMatches.length ? 'text-emerald-600 font-black' : 'text-slate-700'
+                          }`}>
+                            {userStat.predictionsMadeCount} <span className="text-[10px] font-normal text-slate-400">/ {poolMatches.length}</span>
                           </span>
-                        ) : (
-                          <span className="text-slate-300">-</span>
-                        )}
+                          {userStat.predictionsMadeCount !== undefined && userStat.predictionsMadeCount < poolMatches.length && (
+                            <span className="px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-100 text-[9px] font-bold animate-pulse leading-none select-none">
+                              Faltan {poolMatches.length - userStat.predictionsMadeCount}
+                            </span>
+                          )}
+                          {userStat.predictionsMadeCount !== undefined && userStat.predictionsMadeCount === poolMatches.length && (
+                            <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-100 text-[8px] font-bold uppercase tracking-wider scale-90 leading-none select-none">
+                              Completo
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="py-3 px-4 text-right pr-6 font-mono font-extrabold text-sm text-slate-900">
                         {userStat.totalPoints} pts

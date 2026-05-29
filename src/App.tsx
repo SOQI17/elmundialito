@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { INITIAL_MATCHES, INITIAL_LEAGUES } from './data';
-import { Match, Forecast, UserProfile, League, UserStats, LeagueMemberInfo } from './types';
+import { Match, Forecast, UserProfile, League, UserStats, LeagueMemberInfo, MatchPhase } from './types';
 import { calculateScore } from './utils/scoring';
 
 import { collection, doc, setDoc, getDoc, getDocs, onSnapshot, serverTimestamp, deleteDoc } from 'firebase/firestore';
@@ -54,6 +54,7 @@ export default function App() {
   const [currentMemberInfo, setCurrentMemberInfo] = useState<LeagueMemberInfo | null>(null);
   const [currentLeagueMembersData, setCurrentLeagueMembersData] = useState<LeagueMemberInfo[]>([]);
   const [pendingPayments, setPendingPayments] = useState<LeagueMemberInfo[]>([]);
+  const [activePhase, setActivePhase] = useState<MatchPhase>('group');
 
   const enrichedLeagues = leagues.map(l => ({ ...l, members: leaguesMembersMap[l.code] || [] }));
 
@@ -694,6 +695,11 @@ export default function App() {
     setShowOnboarding(false);
   };
 
+  const latestLeagueData = currentLeague ? leagues.find(l => l.code === currentLeague.code) : null;
+  const enrichedCurrentLeague = latestLeagueData 
+    ? { ...latestLeagueData, members: leaguesMembersMap[latestLeagueData.code] || [] } 
+    : null;
+
   // ── Leaderboard calc ──────────────────────────────────────
   const calculateLeaderboardStats = (): UserStats[] => {
     if (!currentUser) return [];
@@ -701,10 +707,21 @@ export default function App() {
     users.forEach(u => { if (u?.id) map.set(u.id, u); });
     if (currentUser?.id) map.set(currentUser.id, currentUser);
 
-    // Filter forecasts by active league
-    const activeForecasts = currentLeague 
-      ? forecasts.filter(f => f.leagueCode === currentLeague.code)
-      : forecasts;
+    // Filter forecasts and matches based on game mode and active phase/pool
+    let poolMatches = matches;
+    if (enrichedCurrentLeague && enrichedCurrentLeague.gameMode && enrichedCurrentLeague.gameMode !== 'total') {
+      if (enrichedCurrentLeague.gameMode === 'sectional') {
+        poolMatches = matches.filter(m => m.phase === activePhase);
+      } else if (enrichedCurrentLeague.gameMode === 'custom') {
+        const group = enrichedCurrentLeague.customGroups?.find(g => g.phases.includes(activePhase));
+        if (group) {
+          poolMatches = matches.filter(m => group.phases.includes(m.phase));
+        }
+      }
+    }
+
+    // Filter forecasts by active league or global fallback
+    const activeForecasts = forecasts.filter(f => !enrichedCurrentLeague || f.leagueCode === enrichedCurrentLeague.code || !f.leagueCode);
 
     activeForecasts.forEach(f => {
       if (f?.userId && f.userId !== 'undefined' && !map.has(f.userId)) {
@@ -712,15 +729,18 @@ export default function App() {
       }
     });
     let participants = Array.from(map.values()).filter(u => !u.isAdmin);
-    if (currentLeague) {
-      const memberIds = leaguesMembersMap[currentLeague.code] || [];
+    if (enrichedCurrentLeague) {
+      const memberIds = leaguesMembersMap[enrichedCurrentLeague.code] || [];
       participants = participants.filter(u => memberIds.includes(u.id));
     }
     return participants.map(user => {
       let exact = 0, trend = 0, simple = 0, none = 0, total = 0, pending = 0;
-      matches.forEach(match => {
+      poolMatches.forEach(match => {
+        // Preference: league-specific first, then global fallback
+        const f = forecasts.find(f => f.matchId === match.id && f.userId === user.id && enrichedCurrentLeague && f.leagueCode === enrichedCurrentLeague.code)
+               || forecasts.find(f => f.matchId === match.id && f.userId === user.id && !f.leagueCode);
+        
         if (match.status === 'finished' && match.homeScore !== undefined && match.awayScore !== undefined) {
-          const f = activeForecasts.find(f => f.matchId === match.id && f.userId === user.id);
           if (f) {
             const r = calculateScore(match.homeScore, match.awayScore, f.homeScore, f.awayScore);
             total += r.score;
@@ -730,21 +750,61 @@ export default function App() {
             else none++;
           } else { none++; }
         } else {
-          if (activeForecasts.find(f => f.matchId === match.id && f.userId === user.id)) pending++;
+          if (f) pending++;
         }
       });
       return { userId: user.id, userName: user.name, userAvatar: user.avatar, exactMatchesCount: exact, trendMatchesCount: trend, simpleMatchesCount: simple, noMatchesCount: none, totalPoints: total, pendingMatchesCount: pending };
     }).sort((a, b) => b.totalPoints - a.totalPoints || b.exactMatchesCount - a.exactMatchesCount || b.trendMatchesCount - a.trendMatchesCount);
   };
+  
+  // Calculate total matches and predictions dynamically based on phase/pool
+  const poolMatchesForHeader = React.useMemo(() => {
+    if (!enrichedCurrentLeague || !enrichedCurrentLeague.gameMode || enrichedCurrentLeague.gameMode === 'total') {
+      return matches;
+    }
+    if (enrichedCurrentLeague.gameMode === 'sectional') {
+      return matches.filter(m => m.phase === activePhase);
+    }
+    if (enrichedCurrentLeague.gameMode === 'custom') {
+      const group = enrichedCurrentLeague.customGroups?.find(g => g.phases.includes(activePhase));
+      if (group) {
+        return matches.filter(m => group.phases.includes(m.phase));
+      }
+    }
+    return matches;
+  }, [matches, enrichedCurrentLeague, activePhase]);
 
-  const latestLeagueData = currentLeague ? leagues.find(l => l.code === currentLeague.code) : null;
-  const enrichedCurrentLeague = latestLeagueData 
-    ? { ...latestLeagueData, members: leaguesMembersMap[latestLeagueData.code] || [] } 
-    : null;
+  // Premium game mode theme coloring
+  const modeTheme = React.useMemo(() => {
+    const mode = enrichedCurrentLeague?.gameMode || 'total';
+    if (mode === 'sectional') {
+      return {
+        bg: 'bg-emerald-600/50',
+        border: 'border-emerald-500/40',
+        text: 'text-emerald-200',
+        accentText: 'text-emerald-300'
+      };
+    }
+    if (mode === 'custom') {
+      return {
+        bg: 'bg-purple-600/50',
+        border: 'border-purple-500/40',
+        text: 'text-purple-200',
+        accentText: 'text-purple-300'
+      };
+    }
+    return {
+      bg: 'bg-indigo-600/55',
+      border: 'border-indigo-500/30',
+      text: 'text-indigo-200',
+      accentText: 'text-indigo-300'
+    };
+  }, [enrichedCurrentLeague]);
+
   const currentStats = calculateLeaderboardStats();
   const myRank = currentStats.findIndex(s => s.userId === currentUser?.id) + 1;
-  const totalMatchesLoaded = matches.length;
-  const totalPredictionMade = matches.filter(m => forecasts.some(f => f.matchId === m.id && f.userId === currentUser?.id && (!currentLeague || f.leagueCode === currentLeague.code))).length;
+  const totalMatchesLoaded = poolMatchesForHeader.length;
+  const totalPredictionMade = poolMatchesForHeader.filter(m => forecasts.some(f => f.matchId === m.id && f.userId === currentUser?.id && (!enrichedCurrentLeague || f.leagueCode === enrichedCurrentLeague.code))).length;
 
   // ── Render guards ─────────────────────────────────────────
   if (!authReady) {
@@ -881,49 +941,49 @@ export default function App() {
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 w-full md:w-auto">
               {currentUser?.isAdmin ? (
                 <>
-                  <div className="p-3 bg-indigo-600/55 rounded-xl border border-indigo-500/30">
-                    <span className="text-[10px] text-indigo-200 uppercase font-bold tracking-wider block">Participantes</span>
+                  <div className={`p-3 ${modeTheme.bg} rounded-xl border ${modeTheme.border}`}>
+                    <span className={`text-[10px] ${modeTheme.text} uppercase font-bold tracking-wider block`}>Participantes</span>
                     <span className="text-xl font-black font-mono text-white">
                       {currentStats.length}
-                      <span className="text-xs font-normal text-indigo-300 ml-1">miembros</span>
+                      <span className={`text-xs font-normal ${modeTheme.accentText} ml-1`}>miembros</span>
                     </span>
                   </div>
-                  <div className="p-3 bg-indigo-600/55 rounded-xl border border-indigo-500/30">
-                    <span className="text-[10px] text-indigo-200 uppercase font-bold tracking-wider block">Pozo Recaudado</span>
-                    <span className="text-xl font-black font-mono text-emerald-350">
+                  <div className={`p-3 ${modeTheme.bg} rounded-xl border ${modeTheme.border}`}>
+                    <span className={`text-[10px] ${modeTheme.text} uppercase font-bold tracking-wider block`}>Pozo Recaudado</span>
+                    <span className="text-xl font-black font-mono text-emerald-355 text-emerald-400">
                       ${currentLeague ? currentLeague.members.length * (currentLeague.costPerEntry || 0) : 0}
-                      <span className="text-xs font-normal text-indigo-300 ml-0.5"> USD</span>
+                      <span className={`text-xs font-normal ${modeTheme.accentText} ml-0.5`}> USD</span>
                     </span>
                   </div>
-                  <div className="p-3 bg-indigo-600/55 rounded-xl border border-indigo-500/30 col-span-2 sm:col-span-1">
-                    <span className="text-[10px] text-indigo-200 uppercase font-bold tracking-wider block">Partidos Jugados</span>
+                  <div className={`p-3 ${modeTheme.bg} rounded-xl border ${modeTheme.border} col-span-2 sm:col-span-1`}>
+                    <span className={`text-[10px] ${modeTheme.text} uppercase font-bold tracking-wider block`}>Partidos Jugados</span>
                     <span className="text-xl font-black font-mono text-amber-300">
                       {matches.filter(m => m.status === 'finished').length}
-                      <span className="text-xs font-normal text-indigo-300 ml-1">/ {totalMatchesLoaded}</span>
+                      <span className={`text-xs font-normal ${modeTheme.accentText} ml-1`}>/ {totalMatchesLoaded}</span>
                     </span>
                   </div>
                 </>
               ) : (
                 <>
-                  <div className="p-3 bg-indigo-600/55 rounded-xl border border-indigo-500/30">
-                    <span className="text-[10px] text-indigo-200 uppercase font-bold tracking-wider block">Puesto en Liga</span>
+                  <div className={`p-3 ${modeTheme.bg} rounded-xl border ${modeTheme.border}`}>
+                    <span className={`text-[10px] ${modeTheme.text} uppercase font-bold tracking-wider block`}>Puesto en Liga</span>
                     <span className="text-xl font-black font-mono">
                       {myRank > 0 ? `#${myRank}` : 'S/C'}
-                      <span className="text-xs font-normal text-indigo-300 ml-1">de {currentStats.length}</span>
+                      <span className={`text-xs font-normal ${modeTheme.accentText} ml-1`}>de {currentStats.length}</span>
                     </span>
                   </div>
-                  <div className="p-3 bg-indigo-600/55 rounded-xl border border-indigo-500/30">
-                    <span className="text-[10px] text-indigo-200 uppercase font-bold tracking-wider block">Tus Pronósticos</span>
+                  <div className={`p-3 ${modeTheme.bg} rounded-xl border ${modeTheme.border}`}>
+                    <span className={`text-[10px] ${modeTheme.text} uppercase font-bold tracking-wider block`}>Tus Pronósticos</span>
                     <span className="text-xl font-black font-mono">
                       {totalPredictionMade}
-                      <span className="text-xs font-normal text-indigo-300"> / {totalMatchesLoaded}</span>
+                      <span className={`text-xs font-normal ${modeTheme.accentText}`}> / {totalMatchesLoaded}</span>
                     </span>
                   </div>
-                  <div className="p-3 bg-indigo-600/55 rounded-xl border border-indigo-500/30 col-span-2 sm:col-span-1">
-                    <span className="text-[10px] text-indigo-200 uppercase font-bold tracking-wider block">Puntos Acumulados</span>
+                  <div className={`p-3 ${modeTheme.bg} rounded-xl border ${modeTheme.border} col-span-2 sm:col-span-1`}>
+                    <span className={`text-[10px] ${modeTheme.text} uppercase font-bold tracking-wider block`}>Puntos Acumulados</span>
                     <span className="text-xl font-black font-mono text-amber-300">
                       {currentStats.find(s => s.userId === currentUser?.id)?.totalPoints ?? 0}
-                      <span className="text-xs font-normal text-indigo-300 ml-0.5"> Pts</span>
+                      <span className={`text-xs font-normal ${modeTheme.accentText} ml-0.5`}> Pts</span>
                     </span>
                   </div>
                 </>
@@ -938,7 +998,7 @@ export default function App() {
         <div className="space-y-8">
           {activeTab === 'calendar' && (
             currentLeague ? (
-              <MatchesList matches={matches} forecasts={forecasts} currentUser={currentUser} allUsers={users} onSaveForecast={handleSaveForecast} onUpdateMatchResult={handleUpdateMatchResult} currentLeague={enrichedCurrentLeague} allLeagues={leagues} />
+              <MatchesList matches={matches} forecasts={forecasts} currentUser={currentUser} allUsers={users} onSaveForecast={handleSaveForecast} onUpdateMatchResult={handleUpdateMatchResult} currentLeague={enrichedCurrentLeague} allLeagues={leagues} activePhase={activePhase} onChangePhase={setActivePhase} />
             ) : (
               <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-8 text-center max-w-xl mx-auto space-y-4 my-8 animate-fadeIn">
                 <div className="w-16 h-16 bg-amber-50 border border-amber-200 text-amber-500 rounded-2xl flex items-center justify-center mx-auto text-3xl select-none animate-bounce">
@@ -961,7 +1021,7 @@ export default function App() {
           )}
           {activeTab === 'leaderboard' && (
             currentLeague ? (
-              <Leaderboard stats={currentStats} currentUser={currentUser} matches={matches} forecasts={forecasts} users={users} currentLeague={enrichedCurrentLeague} />
+              <Leaderboard stats={currentStats} currentUser={currentUser} matches={matches} forecasts={forecasts} users={users} currentLeague={enrichedCurrentLeague} activePhase={activePhase} onChangePhase={setActivePhase} />
             ) : (
               <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-8 text-center max-w-xl mx-auto space-y-4 my-8 animate-fadeIn">
                 <div className="w-16 h-16 bg-amber-50 border border-amber-200 text-amber-500 rounded-2xl flex items-center justify-center mx-auto text-3xl select-none animate-bounce">

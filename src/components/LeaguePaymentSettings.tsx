@@ -51,6 +51,32 @@ export default function LeaguePaymentSettings({ league, onSaveSettings }: League
 
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+
+  const autoSaveGameMode = async (newMode: League['gameMode'], newGroups: League['customGroups']) => {
+    setAutoSaveStatus('saving');
+    try {
+      const config = league.bankConfig || {
+        bankName: ECUADOR_BANKS[0],
+        accountType: 'ahorros',
+        accountNumber: '',
+        ownerName: '',
+        ownerId: ''
+      };
+      const cost = league.costPerEntry || 5;
+      await onSaveSettings(config, cost, newMode, newGroups);
+      setAutoSaveStatus('saved');
+      setTimeout(() => setAutoSaveStatus('idle'), 3000);
+    } catch (err) {
+      console.error('Error auto-saving game mode:', err);
+      setAutoSaveStatus('error');
+    }
+  };
+
+  const handleGameModeChange = (mode: League['gameMode']) => {
+    setGameMode(mode);
+    autoSaveGameMode(mode, customGroups);
+  };
 
   const handleToggleNewGroupPhase = (phase: MatchPhase) => {
     setNewGroupPhases(prev => 
@@ -65,13 +91,17 @@ export default function LeaguePaymentSettings({ league, onSaveSettings }: League
       name: newGroupName.trim(),
       phases: [...newGroupPhases]
     };
-    setCustomGroups(prev => [...(prev || []), newGroup]);
+    const updated = [...(customGroups || []), newGroup];
+    setCustomGroups(updated);
     setNewGroupName('');
     setNewGroupPhases([]);
+    autoSaveGameMode(gameMode, updated);
   };
 
   const handleRemoveCustomGroup = (id: string) => {
-    setCustomGroups(prev => (prev || []).filter(g => g.id !== id));
+    const updated = (customGroups || []).filter(g => g.id !== id);
+    setCustomGroups(updated);
+    autoSaveGameMode(gameMode, updated);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -104,22 +134,41 @@ export default function LeaguePaymentSettings({ league, onSaveSettings }: League
   return (
     <div className="bg-white rounded-2xl border border-slate-100 p-6 space-y-8 max-w-2xl mx-auto shadow-xs animate-fadeIn" id="league-payment-settings-root">
       {/* SECTION 1: GAME MODE */}
-      <div className="space-y-4">
-        <div>
-          <h3 className="text-base font-bold text-slate-900 flex items-center gap-2 font-sans select-none">
-            <Settings className="w-5 h-5 text-indigo-605 text-indigo-600 animate-spin-slow" />
-            Configuración de Modo de Juego
-          </h3>
-          <p className="text-[11px] text-slate-500 mt-1">
-            Elige cómo competirán los miembros de tu liga en la tabla de posiciones y la distribución del acumulado.
-          </p>
+      <div className="space-y-4">        <div className="flex justify-between items-start gap-4">
+          <div>
+            <h3 className="text-base font-bold text-slate-900 flex items-center gap-2 font-sans select-none">
+              <Settings className="w-5 h-5 text-indigo-600 animate-spin-slow" />
+              Configuración de Modo de Juego
+            </h3>
+            <p className="text-[11px] text-slate-500 mt-1">
+              Elige cómo competirán los miembros de tu liga en la tabla de posiciones y la distribución del acumulado.
+            </p>
+          </div>
+          {/* Auto-save Indicator Badge */}
+          {autoSaveStatus !== 'idle' && (
+            <div className={`px-2 py-1 rounded-lg text-[9px] font-bold flex items-center gap-1 shadow-xs animate-fadeIn select-none shrink-0 ${
+              autoSaveStatus === 'saving'
+                ? 'bg-amber-50 border border-amber-100 text-amber-700'
+                : autoSaveStatus === 'saved'
+                ? 'bg-emerald-50 border border-emerald-100 text-emerald-700'
+                : 'bg-red-50 border border-red-100 text-red-700'
+            }`}>
+              {autoSaveStatus === 'saving' && (
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
+              )}
+              {autoSaveStatus === 'saved' && (
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              )}
+              {autoSaveStatus === 'saving' ? 'Guardando...' : autoSaveStatus === 'saved' ? '¡Guardado!' : 'Error'}
+            </div>
+          )}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {/* Total Mode Option */}
           <button
             type="button"
-            onClick={() => setGameMode('total')}
+            onClick={() => handleGameModeChange('total')}
             className={`p-4 border rounded-xl flex flex-col items-start gap-2.5 text-left transition-all cursor-pointer active:scale-98 ${
               gameMode === 'total'
                 ? 'border-indigo-500 bg-indigo-50/30 ring-1 ring-indigo-500'
@@ -140,7 +189,7 @@ export default function LeaguePaymentSettings({ league, onSaveSettings }: League
           {/* Sectional Mode Option */}
           <button
             type="button"
-            onClick={() => setGameMode('sectional')}
+            onClick={() => handleGameModeChange('sectional')}
             className={`p-4 border rounded-xl flex flex-col items-start gap-2.5 text-left transition-all cursor-pointer active:scale-98 ${
               gameMode === 'sectional'
                 ? 'border-indigo-500 bg-indigo-50/30 ring-1 ring-indigo-500'
@@ -161,7 +210,7 @@ export default function LeaguePaymentSettings({ league, onSaveSettings }: League
           {/* Custom Mode Option */}
           <button
             type="button"
-            onClick={() => setGameMode('custom')}
+            onClick={() => handleGameModeChange('custom')}
             className={`p-4 border rounded-xl flex flex-col items-start gap-2.5 text-left transition-all cursor-pointer active:scale-98 ${
               gameMode === 'custom'
                 ? 'border-indigo-500 bg-indigo-50/30 ring-1 ring-indigo-500'
