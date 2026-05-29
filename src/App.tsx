@@ -295,7 +295,16 @@ export default function App() {
       const lData: League[] = [];
       snapshot.forEach(d => {
         const data = d.data();
-        lData.push({ code: data.code, name: data.name, creatorId: data.creatorId, members: [], bankConfig: data.bankConfig, costPerEntry: data.costPerEntry });
+        lData.push({ 
+          code: data.code, 
+          name: data.name, 
+          creatorId: data.creatorId, 
+          members: [], 
+          bankConfig: data.bankConfig, 
+          costPerEntry: data.costPerEntry,
+          gameMode: data.gameMode || 'total',
+          customGroups: data.customGroups || []
+        });
       });
       setLeagues(lData);
     }, (err) => {
@@ -570,10 +579,20 @@ export default function App() {
     }
   };
 
-  const handleSavePaymentSettings = async (bankConfig: League['bankConfig'], costPerEntry: number) => {
+  const handleSavePaymentSettings = async (
+    bankConfig: League['bankConfig'], 
+    costPerEntry: number,
+    gameMode?: League['gameMode'],
+    customGroups?: League['customGroups']
+  ) => {
     if (!currentLeague) return;
     try {
-      await setDoc(doc(db, 'leagues', currentLeague.code), { bankConfig, costPerEntry }, { merge: true });
+      await setDoc(doc(db, 'leagues', currentLeague.code), { 
+        bankConfig, 
+        costPerEntry,
+        gameMode: gameMode || 'total',
+        customGroups: customGroups || []
+      }, { merge: true });
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, `leagues/${currentLeague.code}`);
     }

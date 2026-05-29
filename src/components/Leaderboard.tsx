@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { UserStats, UserProfile, Match, Forecast, League } from '../types';
+import { UserStats, UserProfile, Match, Forecast, League, MatchPhase } from '../types';
 import { Trophy, Award, Search, Percent, Medal, BarChart2, Calendar, ChevronDown, ChevronUp, BookOpen, Coins } from 'lucide-react';
 import { calculateScore } from '../utils/scoring';
 import TeamFlag from './TeamFlag';
@@ -26,6 +26,42 @@ export default function Leaderboard({
   const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
   const [showRules, setShowRules] = useState(false);
 
+  // Active pool ID (sectional phase or custom group id)
+  const [activePoolId, setActivePoolId] = useState<string>(() => {
+    if (currentLeague?.gameMode === 'sectional') return 'group';
+    if (currentLeague?.gameMode === 'custom' && currentLeague.customGroups && currentLeague.customGroups.length > 0) {
+      return currentLeague.customGroups[0].id;
+    }
+    return 'total';
+  });
+
+  React.useEffect(() => {
+    if (currentLeague?.gameMode === 'sectional') {
+      setActivePoolId('group');
+    } else if (currentLeague?.gameMode === 'custom' && currentLeague.customGroups && currentLeague.customGroups.length > 0) {
+      setActivePoolId(currentLeague.customGroups[0].id);
+    } else {
+      setActivePoolId('total');
+    }
+  }, [currentLeague?.code, currentLeague?.gameMode]);
+
+  // Selected pool matches
+  const poolMatches = React.useMemo(() => {
+    if (!currentLeague || !currentLeague.gameMode || currentLeague.gameMode === 'total') {
+      return matches;
+    }
+    if (currentLeague.gameMode === 'sectional') {
+      return matches.filter(m => m.phase === activePoolId);
+    }
+    if (currentLeague.gameMode === 'custom') {
+      const group = currentLeague.customGroups?.find(g => g.id === activePoolId);
+      if (group) {
+        return matches.filter(m => group.phases.includes(m.phase));
+      }
+    }
+    return matches;
+  }, [matches, currentLeague, activePoolId]);
+
   const getLocalDateStr = (dateStr: string) => {
     const d = new Date(dateStr);
     const year = d.getFullYear();
@@ -36,14 +72,14 @@ export default function Leaderboard({
 
   // Obtener fechas únicas del torneo
   const uniqueDates = React.useMemo(() => {
-    if (!matches || matches.length === 0) return [];
-    const dates = matches.map(m => getLocalDateStr(m.dateTime));
+    if (!poolMatches || poolMatches.length === 0) return [];
+    const dates = poolMatches.map(m => getLocalDateStr(m.dateTime));
     return Array.from(new Set(dates)).sort();
-  }, [matches]);
+  }, [poolMatches]);
 
   // Obtener partidos jugados vs totales para una fecha
   const getDateStats = (dateStr: string) => {
-    const dayMatches = matches.filter(m => getLocalDateStr(m.dateTime) === dateStr);
+    const dayMatches = poolMatches.filter(m => getLocalDateStr(m.dateTime) === dateStr);
     const finished = dayMatches.filter(m => m.status === 'finished').length;
     return {
       total: dayMatches.length,
@@ -129,7 +165,7 @@ export default function Leaderboard({
 
       targetMatches.forEach((match) => {
         if (match.status === 'finished' && match.homeScore !== undefined && match.awayScore !== undefined) {
-          const forecast = forecasts.find(f => f.matchId === match.id && f.userId === user.id);
+          const forecast = forecasts.find(f => f.matchId === match.id && f.userId === user.id && (!currentLeague || f.leagueCode === currentLeague.code));
           
           if (forecast) {
             const result = calculateScore(match.homeScore, match.awayScore, forecast.homeScore, forecast.awayScore);
@@ -143,7 +179,7 @@ export default function Leaderboard({
             noMatchesCount++;
           }
         } else {
-          const forecast = forecasts.find(f => f.matchId === match.id && f.userId === user.id);
+          const forecast = forecasts.find(f => f.matchId === match.id && f.userId === user.id && (!currentLeague || f.leagueCode === currentLeague.code));
           if (forecast) {
             pendingMatchesCount++;
           }
@@ -176,12 +212,20 @@ export default function Leaderboard({
 
   // Determinar la fuente de datos (acumulado o diario de partidos)
   const currentStatsSource = React.useMemo(() => {
-    if (activeDateFilter === 'all') {
-      return stats;
+    const targetMatches = activeDateFilter === 'all'
+      ? poolMatches
+      : poolMatches.filter(m => getLocalDateStr(m.dateTime) === activeDateFilter);
+
+    // If game mode is sectional or custom, or a date filter is selected, we MUST calculate dynamically!
+    const needsDynamicCalculation = (currentLeague?.gameMode && currentLeague.gameMode !== 'total') || activeDateFilter !== 'all';
+    
+    if (needsDynamicCalculation) {
+      return calculatePointsForMatches(targetMatches);
     }
-    const dayMatches = matches.filter(m => getLocalDateStr(m.dateTime) === activeDateFilter);
-    return calculatePointsForMatches(dayMatches);
-  }, [activeDateFilter, stats, matches, forecasts, users, currentLeague]);
+    
+    // Otherwise, fallback to pre-computed stats
+    return stats;
+  }, [stats, activeDateFilter, poolMatches, forecasts, users, currentUser, currentLeague]);
 
   // Filtrar clasificaciones basadas en búsqueda
   const filteredStats = currentStatsSource.filter(stat =>
@@ -259,6 +303,83 @@ export default function Leaderboard({
           />
         </div>
       </div>
+
+      {/* Premium Pool Selector */}
+      {currentLeague && currentLeague.gameMode && currentLeague.gameMode !== 'total' && (
+        <div className="bg-slate-50 border border-slate-200/50 rounded-xl p-3.5 space-y-3">
+          <div className="flex items-center gap-1.5 text-indigo-950 font-bold text-xs select-none">
+            <Coins className="w-4 h-4 text-indigo-600" />
+            <span>Seleccionar pozo activo de apuestas:</span>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {currentLeague.gameMode === 'sectional' ? (
+              // Sectional Phases
+              (['group', 'dieciseisavos', 'octavos', 'cuartos', 'semifinal', 'final'] as MatchPhase[]).map((phase) => {
+                const finishedCount = matches.filter(m => m.phase === phase && m.status === 'finished').length;
+                const totalCount = matches.filter(m => m.phase === phase).length;
+                const isActive = activePoolId === phase;
+                
+                const labels: Record<MatchPhase, string> = {
+                  group: 'Grupos',
+                  dieciseisavos: '16avos',
+                  octavos: 'Octavos',
+                  cuartos: 'Cuartos',
+                  semifinal: 'Semifinal',
+                  final: 'Final'
+                };
+
+                return (
+                  <button
+                    key={phase}
+                    onClick={() => {
+                      setActivePoolId(phase);
+                      setActiveDateFilter('all');
+                    }}
+                    className={`px-3 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 border active:scale-95 ${
+                      isActive
+                        ? 'bg-indigo-650 bg-indigo-600 border-indigo-600 text-white shadow-sm font-black'
+                        : 'bg-white border-slate-205 border-slate-200 text-slate-700 hover:bg-slate-100 hover:text-slate-900 font-bold'
+                    }`}
+                  >
+                    <span>{labels[phase]}</span>
+                    <span className={`px-1.5 py-0.5 rounded-md text-[9px] font-mono font-bold ${isActive ? 'bg-indigo-500 text-indigo-100' : 'bg-slate-100 text-slate-500'}`}>
+                      {finishedCount}/{totalCount}
+                    </span>
+                  </button>
+                );
+              })
+            ) : (
+              // Custom Phase Groups
+              (currentLeague.customGroups || []).map((group) => {
+                const finishedCount = matches.filter(m => group.phases.includes(m.phase) && m.status === 'finished').length;
+                const totalCount = matches.filter(m => group.phases.includes(m.phase)).length;
+                const isActive = activePoolId === group.id;
+
+                return (
+                  <button
+                    key={group.id}
+                    onClick={() => {
+                      setActivePoolId(group.id);
+                      setActiveDateFilter('all');
+                    }}
+                    className={`px-3.5 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-2 border active:scale-95 ${
+                      isActive
+                        ? 'bg-indigo-650 bg-indigo-600 border-indigo-600 text-white shadow-sm font-black'
+                        : 'bg-white border-slate-205 border-slate-200 text-slate-700 hover:bg-slate-100 hover:text-slate-900 font-bold'
+                    }`}
+                  >
+                    <span>{group.name}</span>
+                    <span className={`px-1.5 py-0.5 rounded-md text-[9px] font-mono font-bold ${isActive ? 'bg-indigo-500 text-indigo-100' : 'bg-slate-100 text-slate-500'}`}>
+                      {finishedCount}/{totalCount}
+                    </span>
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Botón y Acordeón del Reglamento Profesional */}
       <div className="bg-slate-50 border border-slate-200/60 rounded-xl p-4 transition-all">

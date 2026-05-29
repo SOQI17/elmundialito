@@ -38,6 +38,14 @@ export interface Forecast {
   leagueCode?: string;
 }
 
+export type GameModeType = 'total' | 'sectional' | 'custom';
+
+export interface CustomPhaseGroup {
+  id: string;
+  name: string;
+  phases: MatchPhase[];
+}
+
 export interface League {
   code: string;
   name: string;
@@ -52,6 +60,8 @@ export interface League {
     ownerId: string; // Cédula o RUC
     ownerEmail?: string;
   };
+  gameMode?: GameModeType;
+  customGroups?: CustomPhaseGroup[];
 }
 
 export interface LeagueMemberInfo {

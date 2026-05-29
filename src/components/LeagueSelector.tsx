@@ -14,7 +14,7 @@ interface LeagueSelectorProps {
   onAddUser: (name: string, avatar: string) => void;
   onAddLeague: (name: string, code: string) => Promise<boolean>;
   onJoinLeague: (code: string) => Promise<boolean>;
-  onSavePaymentSettings?: (bankConfig: League['bankConfig'], costPerEntry: number) => Promise<void>;
+  onSavePaymentSettings?: (bankConfig: League['bankConfig'], costPerEntry: number, gameMode?: League['gameMode'], customGroups?: League['customGroups']) => Promise<void>;
   onSubmitVoucher?: (amount: number, code: string, filename: string) => Promise<void>;
   memberInfo?: { paid?: boolean; balance?: number; paymentStatus?: string; paymentCode?: string };
   onLeaveLeague?: (code: string, newCreatorId?: string) => Promise<void>;
