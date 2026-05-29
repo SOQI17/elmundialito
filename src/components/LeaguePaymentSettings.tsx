@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { League, MatchPhase } from '../types';
 import { Landmark, Save, DollarSign, User, FileText, Mail, CheckCircle, Sparkles, Plus, Trash2, Settings, HelpCircle } from 'lucide-react';
 
@@ -54,6 +54,20 @@ export default function LeaguePaymentSettings({ league, onSaveSettings }: League
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+
+  // Sync state with props when league changes
+  useEffect(() => {
+    setBankName(league.bankConfig?.bankName || ECUADOR_BANKS[0]);
+    setAccountType(league.bankConfig?.accountType || 'ahorros');
+    setAccountNumber(league.bankConfig?.accountNumber || '');
+    setOwnerName(league.bankConfig?.ownerName || '');
+    setOwnerId(league.bankConfig?.ownerId || '');
+    setOwnerEmail(league.bankConfig?.ownerEmail || '');
+    setCostPerEntry(league.costPerEntry || 5);
+    setGameMode(league.gameMode || 'total');
+    setCustomGroups(league.customGroups || []);
+    setPoolDistributionMode(league.poolDistributionMode || 'proportional');
+  }, [league]);
 
   const autoSaveGameMode = async (
     newMode: League['gameMode'], 
