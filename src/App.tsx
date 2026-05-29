@@ -304,7 +304,8 @@ export default function App() {
           bankConfig: data.bankConfig, 
           costPerEntry: data.costPerEntry,
           gameMode: data.gameMode || 'total',
-          customGroups: data.customGroups || []
+          customGroups: data.customGroups || [],
+          poolDistributionMode: data.poolDistributionMode || 'proportional'
         });
       });
       setLeagues(lData);
