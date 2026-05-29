@@ -177,13 +177,13 @@ export default function MatchesList({
 
     try {
       // Find forecasts from the selected source league that belong to this user
-      const sourceForecasts = forecasts.filter(
-        f => f.userId === currentUser.id && f.leagueCode === selectedSourceLeagueCode
-      );
+      const sourceForecasts = selectedSourceLeagueCode === '__legacy__'
+        ? forecasts.filter(f => f.userId === currentUser.id && !f.leagueCode)
+        : forecasts.filter(f => f.userId === currentUser.id && f.leagueCode === selectedSourceLeagueCode);
 
       if (sourceForecasts.length === 0) {
         setImportStatus('error');
-        setImportResultText('No se encontraron pronósticos en la liga seleccionada.');
+        setImportResultText('No se encontraron pronósticos en el origen seleccionado.');
         setImporting(false);
         return;
       }
@@ -198,7 +198,7 @@ export default function MatchesList({
 
       if (eligibleForecasts.length === 0) {
         setImportStatus('error');
-        setImportResultText('No hay pronósticos pendientes o elegibles para importar en esta liga (todos los partidos ya comenzaron).');
+        setImportResultText('No hay pronósticos pendientes o elegibles para importar (todos los partidos ya comenzaron).');
         setImporting(false);
         return;
       }
@@ -272,6 +272,40 @@ export default function MatchesList({
           }</strong></span>
         </div>
       </div>
+
+      {/* Legacy Forecasts Banner */}
+      {(() => {
+        const legacyForecasts = forecasts.filter(f => f.userId === currentUser.id && !f.leagueCode);
+        const activeLeagueForecasts = forecasts.filter(f => f.userId === currentUser.id && f.leagueCode === currentLeague?.code);
+        if (legacyForecasts.length > 0 && activeLeagueForecasts.length === 0) {
+          return (
+            <div className="p-4 bg-indigo-50/70 border border-indigo-100/70 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fadeIn">
+              <div className="flex items-start gap-3">
+                <span className="text-2xl mt-0.5 select-none">🎁</span>
+                <div className="space-y-0.5">
+                  <h4 className="text-xs font-bold text-indigo-900 font-sans">¡Detectamos tus pronósticos anteriores!</h4>
+                  <p className="text-[11px] text-indigo-700 font-sans leading-relaxed">
+                    Tienes <strong>{legacyForecasts.length} pronósticos</strong> guardados de la versión anterior. ¿Deseas copiarlos todos a tu liga activa actual (<strong>{currentLeague?.name}</strong>)?
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setSelectedSourceLeagueCode('__legacy__');
+                  setImportProgress(0);
+                  setImportStatus('idle');
+                  setImportResultText('');
+                  setShowImportModal(true);
+                }}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shrink-0 cursor-pointer active:scale-95 text-center"
+              >
+                Importar Pronósticos Ahora
+              </button>
+            </div>
+          );
+        }
+        return null;
+      })()}
 
       {/* Phase tabs */}
       <div className="flex flex-wrap gap-1.5 p-1 bg-slate-50 rounded-xl" id="phase-tabs-container">
@@ -706,8 +740,9 @@ export default function MatchesList({
                   l.members.includes(currentUser.id) && 
                   l.code !== currentLeague?.code
                 );
+                const hasLegacy = forecasts.some(f => f.userId === currentUser.id && !f.leagueCode);
 
-                if (otherLeagues.length === 0) {
+                if (otherLeagues.length === 0 && !hasLegacy) {
                   return (
                     <div className="text-center py-6 space-y-3">
                       <span className="text-3xl select-none">📭</span>
@@ -742,6 +777,11 @@ export default function MatchesList({
                         className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 focus:outline-none focus:border-indigo-500 transition-all cursor-pointer"
                       >
                         <option value="">-- Elige una liga para copiar --</option>
+                        {hasLegacy && (
+                          <option value="__legacy__">
+                            🕒 Pronósticos anteriores (Versión Global) ({forecasts.filter(f => f.userId === currentUser.id && !f.leagueCode).length} pronósticos)
+                          </option>
+                        )}
                         {otherLeagues.map(l => {
                           const count = forecasts.filter(f => f.userId === currentUser.id && f.leagueCode === l.code).length;
                           return (
