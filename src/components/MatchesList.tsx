@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Match, MatchPhase, Forecast, UserProfile } from '../types';
+import { Match, MatchPhase, Forecast, UserProfile, League } from '../types';
 import { Lock, Unlock, Calendar, Eye, Activity, CheckSquare, Sparkles, Tv } from 'lucide-react';
 import LiveMatchSimulator from './LiveMatchSimulator';
 import TeamFlag from './TeamFlag';
@@ -16,6 +16,7 @@ interface MatchesListProps {
     awayScore: number | undefined,
     status: Match['status']
   ) => void;
+  currentLeague?: League | null;
 }
 
 const PHASES_LABELS: Record<MatchPhase, string> = {
@@ -49,7 +50,8 @@ export default function MatchesList({
   currentUser,
   allUsers,
   onSaveForecast,
-  onUpdateMatchResult
+  onUpdateMatchResult,
+  currentLeague
 }: MatchesListProps) {
   const [activePhase, setActivePhase] = useState<MatchPhase>('group');
   const [activeGroupFilter, setActiveGroupFilter] = useState<string>('all');
@@ -321,7 +323,13 @@ export default function MatchesList({
                       const isPendingValue = hasDraft && (!userForecast || userForecast.homeScore !== draft.homeScore || userForecast.awayScore !== draft.awayScore);
                       const displayHomeScore = hasDraft ? draft.homeScore : (userForecast ? userForecast.homeScore : undefined);
                       const displayAwayScore = hasDraft ? draft.awayScore : (userForecast ? userForecast.awayScore : undefined);
-                      const otherForecasts = forecasts.filter(f => f.matchId === match.id && f.userId !== currentUser.id);
+                       const otherForecasts = forecasts.filter(f => {
+                         if (f.matchId !== match.id || f.userId === currentUser.id) return false;
+                         if (currentLeague) {
+                           return (currentLeague.members || []).includes(f.userId);
+                         }
+                         return true;
+                       });
 
                       return (
                         <div
