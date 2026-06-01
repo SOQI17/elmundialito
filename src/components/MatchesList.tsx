@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Match, MatchPhase, Forecast, UserProfile, League } from '../types';
-import { Lock, Unlock, Calendar, Eye, Activity, CheckSquare, Sparkles, Tv } from 'lucide-react';
+import { Match, MatchPhase, Forecast, UserProfile, League, LeagueMemberInfo } from '../types';
+import { Lock, Unlock, Calendar, Eye, Activity, CheckSquare, Sparkles, Tv, AlertCircle } from 'lucide-react';
 import LiveMatchSimulator from './LiveMatchSimulator';
 import TeamFlag from './TeamFlag';
 
@@ -20,6 +20,7 @@ interface MatchesListProps {
   allLeagues?: League[];
   activePhase: MatchPhase;
   onChangePhase: (phase: MatchPhase) => void;
+  leagueMembersData?: LeagueMemberInfo[];
 }
 
 const PHASES_LABELS: Record<MatchPhase, string> = {
@@ -57,7 +58,8 @@ export default function MatchesList({
   currentLeague,
   allLeagues = [],
   activePhase,
-  onChangePhase
+  onChangePhase,
+  leagueMembersData = []
 }: MatchesListProps) {
   const [activeGroupFilter, setActiveGroupFilter] = useState<string>('all');
   const [activeDateFilter, setActiveDateFilter] = useState<string>('all');
@@ -66,6 +68,11 @@ export default function MatchesList({
   const [savingMatchIds, setSavingMatchIds] = useState<Record<string, boolean>>({});
   const [selectedLiveMatch, setSelectedLiveMatch] = useState<Match | null>(null);
   const [now, setNow] = useState<Date>(new Date());
+
+  const myMemberData = leagueMembersData?.find(m => m.userId === currentUser.id);
+  const isCreator = currentLeague?.creatorId === currentUser.id;
+  const isAdmin = currentUser.isAdmin;
+  const isBlockedByPayment = !!currentLeague && !isCreator && !isAdmin && (!myMemberData || !myMemberData.paid);
 
   // Import Modal States
   const [showImportModal, setShowImportModal] = useState(false);
@@ -83,12 +90,14 @@ export default function MatchesList({
   }, []);
 
   const isMatchLocked = (match: Match): boolean => {
+    if (isBlockedByPayment) return true;
     if (match.status === 'live' || match.status === 'finished') return true;
     const kickoff = new Date(match.dateTime).getTime();
     return now.getTime() >= kickoff;
   };
 
   const getLockReason = (match: Match): string => {
+    if (isBlockedByPayment) return 'Falta de Pago';
     if (match.status === 'finished') return 'Terminado';
     if (match.status === 'live') return 'Partido en Juego';
     return 'Comenzado';
@@ -240,7 +249,7 @@ export default function MatchesList({
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-xl font-bold text-slate-900 font-sans">Calendario de Partidos</h2>
-            {currentUser && !currentUser.isAdmin && (
+            {currentUser && !currentUser.isAdmin && !isBlockedByPayment && (
               <button
                 onClick={() => {
                   setSelectedSourceLeagueCode('');
@@ -276,6 +285,20 @@ export default function MatchesList({
           }</strong></span>
         </div>
       </div>
+
+      {/* Payment Block Warning Banner */}
+      {isBlockedByPayment && (
+        <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl flex items-start gap-3 animate-fadeIn select-none">
+          <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <h4 className="text-xs font-black text-rose-900 uppercase tracking-wide">⚠️ Pronósticos Bloqueados por Falta de Pago</h4>
+            <p className="text-[11px] text-rose-700 font-bold leading-relaxed">
+              No puedes registrar ni modificar tus pronósticos porque tu cuenta se encuentra pendiente de pago en esta liga. 
+              Por favor, comunícate con el organizador de la liga (<strong>{allUsers.find(u => u.id === currentLeague?.creatorId)?.name || 'Organizador'}</strong>) para confirmar tu pago vía transferencia o efectivo.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Legacy Forecasts Banner */}
       {(() => {

@@ -346,7 +346,8 @@ export default function App() {
           paymentStatus: data.paymentStatus || 'unpaid',
           paymentVoucherUrl: data.paymentVoucherUrl,
           paymentVoucherAmount: data.paymentVoucherAmount,
-          paymentCode: data.paymentCode
+          paymentCode: data.paymentCode,
+          paymentMethod: data.paymentMethod
         });
       } else {
         setCurrentMemberInfo(null);
@@ -374,7 +375,8 @@ export default function App() {
           paymentStatus: d.paymentStatus || 'unpaid',
           paymentVoucherUrl: d.paymentVoucherUrl,
           paymentVoucherAmount: d.paymentVoucherAmount,
-          paymentCode: d.paymentCode
+          paymentCode: d.paymentCode,
+          paymentMethod: d.paymentMethod
         });
       });
       setCurrentLeagueMembersData(data);
@@ -644,6 +646,27 @@ export default function App() {
       handleFirestoreError(err, OperationType.WRITE, `leagues/${leagueCode}/members/${userId}`);
     }
   };
+
+  const handleUpdateMemberPayment = async (
+    leagueCode: string,
+    userId: string,
+    paid: boolean,
+    paymentStatus: LeagueMemberInfo['paymentStatus'],
+    paymentMethod?: LeagueMemberInfo['paymentMethod'],
+    amount?: number
+  ) => {
+    try {
+      await setDoc(doc(db, 'leagues', leagueCode, 'members', userId), {
+        paid,
+        paymentStatus,
+        paymentMethod: paymentMethod || null,
+        balance: amount ?? 0
+      }, { merge: true });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `leagues/${leagueCode}/members/${userId}`);
+    }
+  };
+
 
   const handleLeaveLeague = async (leagueCode: string, newCreatorId?: string) => {
     if (!currentUser) return;
@@ -1001,7 +1024,19 @@ export default function App() {
         <div className="space-y-8">
           {activeTab === 'calendar' && (
             currentLeague ? (
-              <MatchesList matches={matches} forecasts={forecasts} currentUser={currentUser} allUsers={users} onSaveForecast={handleSaveForecast} onUpdateMatchResult={handleUpdateMatchResult} currentLeague={enrichedCurrentLeague} allLeagues={leagues} activePhase={activePhase} onChangePhase={setActivePhase} />
+              <MatchesList
+                matches={matches}
+                forecasts={forecasts}
+                currentUser={currentUser}
+                allUsers={users}
+                onSaveForecast={handleSaveForecast}
+                onUpdateMatchResult={handleUpdateMatchResult}
+                currentLeague={enrichedCurrentLeague}
+                allLeagues={leagues}
+                activePhase={activePhase}
+                onChangePhase={setActivePhase}
+                leagueMembersData={currentLeagueMembersData}
+              />
             ) : (
               <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-8 text-center max-w-xl mx-auto space-y-4 my-8 animate-fadeIn">
                 <div className="w-16 h-16 bg-amber-50 border border-amber-200 text-amber-500 rounded-2xl flex items-center justify-center mx-auto text-3xl select-none animate-bounce">
@@ -1063,6 +1098,7 @@ export default function App() {
               leagueMembersData={currentLeagueMembersData}
               realUserId={authUser?.uid}
               realUserEmail={authUser?.email || ''}
+              onUpdateMemberPayment={handleUpdateMemberPayment}
             />
           )}
           {activeTab === 'sandbox' && <InteractiveSandbox />}

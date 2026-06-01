@@ -21,6 +21,7 @@ interface LeagueSelectorProps {
   leagueMembersData?: LeagueMemberInfo[];
   realUserId?: string;
   realUserEmail?: string;
+  onUpdateMemberPayment?: (leagueCode: string, userId: string, paid: boolean, paymentStatus: LeagueMemberInfo['paymentStatus'], paymentMethod?: LeagueMemberInfo['paymentMethod'], amount?: number) => Promise<void>;
 }
 
 const AVATARS = ['🦁', '🦊', '🐻', '🐼', '🐨', '🐱', '🐶', '🐯', '🐴', '🦄', '🦅', '🦉', '⚽', '🏆'];
@@ -41,7 +42,8 @@ export default function LeagueSelector({
   onLeaveLeague,
   leagueMembersData,
   realUserId,
-  realUserEmail
+  realUserEmail,
+  onUpdateMemberPayment
 }: LeagueSelectorProps) {
   const isAdmin = currentUser.isAdmin || (realUserEmail === 'alexisguerra9577@gmail.com');
   const visibleLeagues = isAdmin
@@ -172,6 +174,7 @@ export default function LeagueSelector({
           balance: mData?.balance || 0,
           paymentStatus: mData?.paymentStatus || 'unpaid',
           paymentCode: mData?.paymentCode,
+          paymentMethod: mData?.paymentMethod,
           isCreator: currentLeague.creatorId === memberId
         };
       })
@@ -568,7 +571,7 @@ export default function LeagueSelector({
                       ) : member.paid ? (
                         <div className="text-left sm:text-right space-y-0.5">
                           <span className="px-2.5 py-1 bg-emerald-50 border border-emerald-100 text-emerald-700 text-[9px] font-black uppercase rounded-lg tracking-wider inline-block">
-                            ✓ Activo y Pagado
+                            ✓ Activo y Pagado {member.paymentMethod === 'transfer' ? '(Transf.)' : member.paymentMethod === 'cash' ? '(Efectivo)' : ''}
                           </span>
                           <span className="text-[9px] text-emerald-600 font-mono font-bold block">
                             Saldo: ${member.balance || 0}.00 USD
@@ -589,6 +592,73 @@ export default function LeagueSelector({
                       )}
                     </div>
                   </div>
+
+                  {/* Controles de pago del creador */}
+                  {currentLeague.creatorId === currentUser.id && member.id !== currentLeague.creatorId && (
+                    <div className="mt-3 pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3 animate-fadeIn">
+                      <div className="flex items-center gap-1.5 select-none">
+                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">
+                          ⚙️ Control de Pago (Organizador):
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {member.paid ? (
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              if (window.confirm(`¿Seguro que deseas revertir el pago de ${member.name}? Sus pronósticos se bloquearán.`)) {
+                                if (onUpdateMemberPayment) {
+                                  await onUpdateMemberPayment(currentLeague.code, member.id, false, 'unpaid', undefined, 0);
+                                }
+                              }
+                            }}
+                            className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 font-extrabold text-[10px] rounded-lg transition-all cursor-pointer shadow-3xs flex items-center gap-1"
+                          >
+                            ⚠️ Revertir Pago
+                          </button>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (onUpdateMemberPayment) {
+                                  await onUpdateMemberPayment(
+                                    currentLeague.code,
+                                    member.id,
+                                    true,
+                                    'approved',
+                                    'transfer',
+                                    currentLeague.costPerEntry || 5
+                                  );
+                                }
+                              }}
+                              className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-705 text-emerald-700 font-extrabold text-[10px] rounded-lg transition-all cursor-pointer shadow-3xs flex items-center gap-1"
+                            >
+                              💸 Pagó Transferencia
+                            </button>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (onUpdateMemberPayment) {
+                                  await onUpdateMemberPayment(
+                                    currentLeague.code,
+                                    member.id,
+                                    true,
+                                    'approved',
+                                    'cash',
+                                    currentLeague.costPerEntry || 5
+                                  );
+                                }
+                              }}
+                              className="px-3 py-1.5 bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-700 font-extrabold text-[10px] rounded-lg transition-all cursor-pointer shadow-3xs flex items-center gap-1"
+                            >
+                              💵 Pagó Efectivo
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Acciones exclusivas de la cuenta real del usuario logueado */}
                   {isRealUserCard && (

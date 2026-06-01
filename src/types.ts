@@ -75,6 +75,7 @@ export interface LeagueMemberInfo {
   paymentVoucherUrl?: string;
   paymentVoucherAmount?: number;
   paymentCode?: string;
+  paymentMethod?: 'transfer' | 'cash';
 }
 
 export interface UserProfile {
