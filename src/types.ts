@@ -85,6 +85,7 @@ export interface UserProfile {
   isAdmin?: boolean;
   isOfflineFallback?: boolean;
   onboarded?: boolean; // false = mostrar onboarding al primer ingreso
+  email?: string;
 }
 
 export interface UserStats {

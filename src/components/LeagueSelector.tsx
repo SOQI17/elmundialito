@@ -45,7 +45,10 @@ export default function LeagueSelector({
   realUserEmail,
   onUpdateMemberPayment
 }: LeagueSelectorProps) {
-  const isAdmin = currentUser.isAdmin || (realUserEmail === 'alexisguerra9577@gmail.com');
+  const isAdmin = currentUser.isAdmin || (realUserEmail ? (
+    realUserEmail.toLowerCase() === 'alexisguerra9577@gmail.com' ||
+    realUserEmail.toLowerCase() === 'alexis.guerra@orimec.com.ec'
+  ) : false);
   const visibleLeagues = isAdmin
     ? allLeagues
     : allLeagues.filter(league => {
@@ -175,7 +178,8 @@ export default function LeagueSelector({
           paymentStatus: mData?.paymentStatus || 'unpaid',
           paymentCode: mData?.paymentCode,
           paymentMethod: mData?.paymentMethod,
-          isCreator: currentLeague.creatorId === memberId
+          isCreator: currentLeague.creatorId === memberId,
+          email: userProf?.email || ''
         };
       })
     : [];
@@ -552,13 +556,19 @@ export default function LeagueSelector({
                         <span className="text-[9px] text-slate-400 font-bold block uppercase tracking-wider mt-0.5 select-none">
                           {member.isCreator ? '👑 Organizador' : '⚽ Integrante'}
                         </span>
-                        {isRealUserCard && realUserEmail && (
+                        {(isRealUserCard && realUserEmail) ? (
                           <div className="mt-1.5 select-none">
                             <span className="text-[9px] text-indigo-650 font-bold bg-indigo-50/80 px-1.5 py-0.5 rounded border border-indigo-100/60 inline-block font-sans select-all">
                               ✉️ {realUserEmail}
                             </span>
                           </div>
-                        )}
+                        ) : (isAdmin && member.email) ? (
+                          <div className="mt-1.5 select-none">
+                            <span className="text-[9px] text-indigo-650 font-bold bg-indigo-50/80 px-1.5 py-0.5 rounded border border-indigo-100/60 inline-block font-sans select-all">
+                              ✉️ {member.email}
+                            </span>
+                          </div>
+                        ) : null}
                       </div>
                     </div>
 

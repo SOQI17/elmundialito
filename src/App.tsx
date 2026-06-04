@@ -21,6 +21,12 @@ import ForceBootstrap from './components/Forcebootstrap';
 
 const ADMIN_EMAIL = 'alexisguerra9577@gmail.com';
 
+const isAdminEmail = (email: string | null | undefined): boolean => {
+  if (!email) return false;
+  const lower = email.toLowerCase();
+  return lower === 'alexisguerra9577@gmail.com' || lower === 'alexis.guerra@orimec.com.ec';
+};
+
 export default function App() {
   const [activeTab, setActiveTab] = useState<'leagues' | 'calendar' | 'leaderboard' | 'sandbox' | 'admin'>('calendar');
   const [showForceBootstrap, setShowForceBootstrap] = useState(false);
@@ -74,8 +80,9 @@ export default function App() {
               id: user.uid,
               name: user.displayName || user.email?.split('@')[0] || 'Jugador',
               avatar: '⚽',
-              isAdmin: user.email === ADMIN_EMAIL,
+              isAdmin: isAdminEmail(user.email),
               onboarded: false,
+              email: user.email || '',
             };
             try {
               await setDoc(userDocRef, profile);
@@ -89,9 +96,23 @@ export default function App() {
           } else {
             const data = docSnap.data() as UserProfile;
             profile = { id: docSnap.id, ...data };
-            if (user.email === ADMIN_EMAIL && !profile.isAdmin) {
+            
+            let needsUpdate = false;
+            const updateFields: any = {};
+
+            if (isAdminEmail(user.email) && !profile.isAdmin) {
               profile.isAdmin = true;
-              try { await setDoc(userDocRef, { isAdmin: true }, { merge: true }); } catch (_) {}
+              updateFields.isAdmin = true;
+              needsUpdate = true;
+            }
+            if (user.email && !profile.email) {
+              profile.email = user.email;
+              updateFields.email = user.email;
+              needsUpdate = true;
+            }
+
+            if (needsUpdate) {
+              try { await setDoc(userDocRef, updateFields, { merge: true }); } catch (_) {}
             }
           }
 
@@ -105,9 +126,10 @@ export default function App() {
             id: user.uid,
             name: user.displayName || user.email?.split('@')[0] || 'Jugador',
             avatar: '⚽',
-            isAdmin: user.email === ADMIN_EMAIL,
+            isAdmin: isAdminEmail(user.email),
             isOfflineFallback: true,
             onboarded: true, // skip onboarding in offline mode
+            email: user.email || '',
           };
           setCurrentUser(fallbackProfile);
           setOfflineModeActive(true);
