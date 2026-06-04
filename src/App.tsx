@@ -62,6 +62,9 @@ export default function App() {
   const [pendingPayments, setPendingPayments] = useState<LeagueMemberInfo[]>([]);
   const [activePhase, setActivePhase] = useState<MatchPhase>('group');
 
+  const isRealAdmin = !!(currentUser?.isAdmin || isAdminEmail(authUser?.email));
+  const currentUserWithAdminFlag = currentUser ? { ...currentUser, isAdmin: isRealAdmin } : null;
+
   const enrichedLeagues = leagues.map(l => ({ ...l, members: leaguesMembersMap[l.code] || [] }));
 
   // ── 1. Auth listener ──────────────────────────────────────
@@ -166,7 +169,7 @@ export default function App() {
 
   // ── 2.5 Admin backfill of missing user emails ────────────────
   useEffect(() => {
-    if (!currentUser?.isAdmin || users.length === 0 || offlineModeActive) return;
+    if (!isRealAdmin || users.length === 0 || offlineModeActive) return;
 
     const backfillEmails = async () => {
       // Find all users who don't have an email in their public profile
@@ -192,7 +195,7 @@ export default function App() {
     };
 
     backfillEmails();
-  }, [currentUser, users, offlineModeActive]);
+  }, [isRealAdmin, users, offlineModeActive]);
 
   // ── 3. Matches sync ───────────────────────────────────────
   useEffect(() => {
@@ -961,7 +964,7 @@ export default function App() {
                 {tab.icon}{tab.label}
               </button>
             ))}
-            {currentUser?.isAdmin && (
+            {isRealAdmin && (
               <button
                 onClick={() => setActiveTab('admin')}
                 className={`flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
@@ -1017,7 +1020,7 @@ export default function App() {
 
             {/* Stats */}
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 w-full md:w-auto">
-              {currentUser?.isAdmin ? (
+              {isRealAdmin ? (
                 <>
                   <div className={`p-3 ${modeTheme.bg} rounded-xl border ${modeTheme.border}`}>
                     <span className={`text-[10px] ${modeTheme.text} uppercase font-bold tracking-wider block`}>Participantes</span>
@@ -1079,7 +1082,7 @@ export default function App() {
               <MatchesList
                 matches={matches}
                 forecasts={forecasts}
-                currentUser={currentUser}
+                currentUser={currentUserWithAdminFlag!}
                 allUsers={users}
                 onSaveForecast={handleSaveForecast}
                 onUpdateMatchResult={handleUpdateMatchResult}
@@ -1111,7 +1114,7 @@ export default function App() {
           )}
           {activeTab === 'leaderboard' && (
             currentLeague ? (
-              <Leaderboard stats={currentStats} currentUser={currentUser} matches={matches} forecasts={forecasts} users={users} currentLeague={enrichedCurrentLeague} activePhase={activePhase} onChangePhase={setActivePhase} />
+              <Leaderboard stats={currentStats} currentUser={currentUserWithAdminFlag!} matches={matches} forecasts={forecasts} users={users} currentLeague={enrichedCurrentLeague} activePhase={activePhase} onChangePhase={setActivePhase} />
             ) : (
               <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-8 text-center max-w-xl mx-auto space-y-4 my-8 animate-fadeIn">
                 <div className="w-16 h-16 bg-amber-50 border border-amber-200 text-amber-500 rounded-2xl flex items-center justify-center mx-auto text-3xl select-none animate-bounce">
@@ -1134,7 +1137,7 @@ export default function App() {
           )}
           {activeTab === 'leagues' && (
             <LeagueSelector
-              currentUser={currentUser}
+              currentUser={currentUserWithAdminFlag!}
               allUsers={users}
               currentLeague={enrichedCurrentLeague}
               allLeagues={enrichedLeagues}
@@ -1154,7 +1157,7 @@ export default function App() {
             />
           )}
           {activeTab === 'sandbox' && <InteractiveSandbox />}
-          {activeTab === 'admin' && currentUser?.isAdmin && (
+          {activeTab === 'admin' && isRealAdmin && (
             <AdminPanel
               matches={matches}
               onUpdateMatchResult={handleUpdateMatchResult}
