@@ -164,6 +164,36 @@ export default function App() {
     return () => unsubscribe();
   }, [authUser]);
 
+  // ── 2.5 Admin backfill of missing user emails ────────────────
+  useEffect(() => {
+    if (!currentUser?.isAdmin || users.length === 0 || offlineModeActive) return;
+
+    const backfillEmails = async () => {
+      // Find all users who don't have an email in their public profile
+      const usersToBackfill = users.filter(u => !u.email && !u.isOfflineFallback);
+      if (usersToBackfill.length === 0) return;
+
+      for (const targetUser of usersToBackfill) {
+        try {
+          const infoSnap = await getDoc(doc(db, 'users', targetUser.id, 'private', 'info'));
+          if (infoSnap.exists()) {
+            const infoData = infoSnap.data();
+            if (infoData && infoData.email) {
+              await setDoc(doc(db, 'users', targetUser.id), {
+                email: infoData.email
+              }, { merge: true });
+              console.log(`Backfilled email for user ${targetUser.id}: ${infoData.email}`);
+            }
+          }
+        } catch (err) {
+          console.warn(`Admin failed to backfill email for user ${targetUser.id}:`, err);
+        }
+      }
+    };
+
+    backfillEmails();
+  }, [currentUser, users, offlineModeActive]);
+
   // ── 3. Matches sync ───────────────────────────────────────
   useEffect(() => {
     if (!authUser) return;
