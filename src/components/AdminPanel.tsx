@@ -481,7 +481,7 @@ export default function AdminPanel({
           </p>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           {onTriggerBootstrap && (
             <button
               id="btn-factory-bootstrap"
@@ -492,6 +492,37 @@ export default function AdminPanel({
               🔧 Cargar / Resetear DB
             </button>
           )}
+
+          <button
+            onClick={async () => {
+              try {
+                const { db } = await import('../firebase');
+                const { doc, setDoc } = await import('firebase/firestore');
+                const realIncidents = [
+                  { minute: 0, type: 'start', title: 'Inicio del partido', description: '¡Rueda el balón en el Estadio Azteca! Comienza el partido de apertura de la Copa Mundial 2026.', timestamp: Date.now() },
+                  { minute: 9, type: 'goal_home', title: '¡GOL DE MÉXICO!', description: 'Julián Andrés Quiñones abre el marcador con un remate de cabeza tras un gran centro de Luis Chávez.', timestamp: Date.now() },
+                  { minute: 50, type: 'yellow_away', title: 'Tarjeta Amarilla', description: 'Sphephelo Sithole (Sudáfrica) es amonestado por una falta fuerte sobre Edson Álvarez.', timestamp: Date.now() },
+                  { minute: 67, type: 'goal_home', title: '¡GOL DE MÉXICO!', description: 'Raúl Jiménez define con categoría mano a mano con el portero rival para poner el 2-0.', timestamp: Date.now() },
+                  { minute: 84, type: 'yellow_away', title: 'Tarjeta Amarilla', description: 'Themba Zwane (Sudáfrica) recibe tarjeta de amonestación por reclamar airadamente al árbitro.', timestamp: Date.now() },
+                  { minute: 90, type: 'red_home', title: 'Tarjeta Roja Directa', description: 'César Montes es expulsado tras una entrada tardía en el minuto 90+2.', timestamp: Date.now() },
+                  { minute: 94, type: 'end', title: 'Fin del partido', description: '¡Termina el partido inaugural! México vence 2-0 a Sudáfrica y obtiene sus primeros 3 puntos.', timestamp: Date.now() }
+                ];
+                await setDoc(doc(db, 'matches', 'M_1'), {
+                  homeScore: 2,
+                  awayScore: 0,
+                  status: 'finished',
+                  incidents: realIncidents
+                }, { merge: true });
+                alert('✅ ¡Estadísticas y cronología real del México vs Sudáfrica cargadas con éxito en Firestore!');
+              } catch (err: any) {
+                console.error(err);
+                alert('❌ Error al actualizar: ' + (err.message || String(err)));
+              }
+            }}
+            className="flex items-center gap-1.5 px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold rounded-xl border border-emerald-300 transition-all self-start cursor-pointer shadow-xs"
+          >
+            ⚽ Cargar Estadísticas Reales (México 2-0)
+          </button>
 
           <button
             id="btn-factory-reset"
