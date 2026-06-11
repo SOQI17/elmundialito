@@ -328,8 +328,15 @@ export default function AdminPanel({
       <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3 text-xs text-amber-800 leading-relaxed font-medium">
         <AlertTriangle className="w-5 h-5 shrink-0 text-amber-600" />
         <div>
-          <strong className="block font-bold">Instrucciones de Simulación:</strong>
-          Cambia el estado de un partido a <strong className="text-amber-900">"Finished" (Terminado)</strong>, define el número de goles reales y presiona <strong className="text-indigo-900">"Guardar"</strong>. Las posiciones y estadísticas se recalcularán de inmediato en la pestaña de <strong>Clasificación</strong>.
+          <strong className="block font-bold text-amber-900 mb-1">Sincronización y Control de Marcadores:</strong>
+          <ul className="list-disc list-inside space-y-1">
+            <li>
+              <strong className="text-slate-800">Sincronización Automática (Internet):</strong> Los resultados en vivo por internet se buscan y <strong>guardan automáticamente</strong> en Firestore en segundo plano cada 2 minutos (sin necesidad de presionar Guardar).
+            </li>
+            <li>
+              <strong className="text-slate-800">Edición Manual:</strong> Si deseas forzar o corregir un marcador manualmente, edita los goles o el estado de un partido en la lista inferior y presiona <strong className="text-indigo-900">"Guardar"</strong>.
+            </li>
+          </ul>
         </div>
       </div>
 
@@ -365,15 +372,6 @@ export default function AdminPanel({
                 <Wifi className="w-3.5 h-3.5" />
               )}
               Sincronizar vía Internet
-            </button>
-
-            <button
-              onClick={() => handleSyncFromInternet(true)}
-              disabled={syncStatus === 'syncing'}
-              className="px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 hover:text-emerald-800 border border-emerald-200 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all shrink-0 cursor-pointer disabled:opacity-50"
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              Probar Simulación
             </button>
           </div>
         </div>
