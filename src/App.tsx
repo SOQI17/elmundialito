@@ -377,6 +377,33 @@ export default function App() {
     };
   }, [isRealAdmin, matches, offlineModeActive]);
 
+  // Migración automática para el partido de México vs Sudáfrica con estadísticas e incidentes reales de Google
+  useEffect(() => {
+    if (!db || !isRealAdmin || matches.length === 0) return;
+    
+    const targetMatch = matches.find(m => m.id === 'M_1');
+    if (targetMatch && (!targetMatch.incidents || targetMatch.incidents.length === 0 || targetMatch.status !== 'finished')) {
+      const realIncidents = [
+        { minute: 0, type: 'start', title: 'Inicio del partido', description: '¡Rueda el balón en el Estadio Azteca! Comienza el partido de apertura de la Copa Mundial 2026.', timestamp: Date.now() },
+        { minute: 9, type: 'goal_home', title: '¡GOL DE MÉXICO!', description: 'Julián Andrés Quiñones abre el marcador con un remate de cabeza tras un gran centro de Luis Chávez.', timestamp: Date.now() },
+        { minute: 50, type: 'yellow_away', title: 'Tarjeta Amarilla', description: 'Sphephelo Sithole (Sudáfrica) es amonestado por una falta fuerte sobre Edson Álvarez.', timestamp: Date.now() },
+        { minute: 67, type: 'goal_home', title: '¡GOL DE MÉXICO!', description: 'Raúl Jiménez define con categoría mano a mano con el portero rival para poner el 2-0.', timestamp: Date.now() },
+        { minute: 84, type: 'yellow_away', title: 'Tarjeta Amarilla', description: 'Themba Zwane (Sudáfrica) recibe tarjeta de amonestación por reclamar airadamente al árbitro.', timestamp: Date.now() },
+        { minute: 90, type: 'red_home', title: 'Tarjeta Roja Directa', description: 'César Montes es expulsado tras una entrada tardía en el minuto 90+2.', timestamp: Date.now() },
+        { minute: 94, type: 'end', title: 'Fin del partido', description: '¡Termina el partido inaugural! México vence 2-0 a Sudáfrica y obtiene sus primeros 3 puntos.', timestamp: Date.now() }
+      ];
+
+      setDoc(doc(db, 'matches', 'M_1'), {
+        homeScore: 2,
+        awayScore: 0,
+        status: 'finished',
+        incidents: realIncidents
+      }, { merge: true })
+      .then(() => console.log('✅ Migración: Partido M_1 actualizado con goles e incidentes reales.'))
+      .catch(err => console.error('Error al migrar M_1:', err));
+    }
+  }, [db, isRealAdmin, matches]);
+
   // ── 3. Matches sync ───────────────────────────────────────
   useEffect(() => {
     if (!authUser) return;

@@ -712,8 +712,15 @@ export default function MatchesList({
                               )}
 
 
-                              
-
+                              {match.status === 'finished' && (
+                                <button
+                                  onClick={() => setSelectedLiveMatch(match)}
+                                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer w-full md:w-auto justify-center border bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200"
+                                >
+                                  <Activity className="w-3.5 h-3.5 text-indigo-650" />
+                                  <span>Ver Estadísticas</span>
+                                </button>
+                              )}
                               <button
                                 onClick={() => setExpandedMatchId(expandedMatchId === match.id ? null : match.id)}
                                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold tracking-wide transition-all cursor-pointer w-full md:w-auto justify-center"

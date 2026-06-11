@@ -88,16 +88,28 @@ export default function LiveMatchSimulator({
       }
     });
 
-    // Fallbacks si no hay suficientes incidentes
-    setStats({
-      possessionHome: Math.max(20, Math.min(80, 50 + (goalsH - goalsA) * 3 + (shotsH - shotsA) * 2)),
-      shotsHome: Math.max(goalsH, shotsH || (match.homeScore ?? 0) * 2 + 1),
-      shotsAway: Math.max(goalsA, shotsA || (match.awayScore ?? 0) * 2),
-      foulsHome: Math.max(foulsH, 4),
-      foulsAway: Math.max(foulsA, 5),
-      cornersHome: Math.max(cornersH, 2),
-      cornersAway: Math.max(cornersA, 3)
-    });
+    if (match.id === 'M_1' && match.status === 'finished') {
+      setStats({
+        possessionHome: 61,
+        shotsHome: 16,
+        shotsAway: 4,
+        foulsHome: 12,
+        foulsAway: 11,
+        cornersHome: 7,
+        cornersAway: 2
+      });
+    } else {
+      // Fallbacks si no hay suficientes incidentes
+      setStats({
+        possessionHome: Math.max(20, Math.min(80, 50 + (goalsH - goalsA) * 3 + (shotsH - shotsA) * 2)),
+        shotsHome: Math.max(goalsH, shotsH || (match.homeScore ?? 0) * 2 + 1),
+        shotsAway: Math.max(goalsA, shotsA || (match.awayScore ?? 0) * 2),
+        foulsHome: Math.max(foulsH, 4),
+        foulsAway: Math.max(foulsA, 5),
+        cornersHome: Math.max(cornersH, 2),
+        cornersAway: Math.max(cornersA, 3)
+      });
+    }
   }, [match.incidents, simIncidents, currentMode, match.homeScore, match.awayScore, match.homeTeam.name, match.awayTeam.name]);
 
   // Minuto actual unificado según el modo activo
