@@ -130,11 +130,24 @@ export default function AdminPanel({
   const [showAdvancedSync, setShowAdvancedSync] = useState<boolean>(false);
 
   // Estados para la corrección manual de pronósticos de usuario
+  const [overrideLeagueCode, setOverrideLeagueCode] = useState<string>(currentLeague?.code || '');
   const [overrideUserId, setOverrideUserId] = useState<string>('');
   const [overrideMatchId, setOverrideMatchId] = useState<string>('');
   const [overrideHomeScore, setOverrideHomeScore] = useState<number | string>('');
   const [overrideAwayScore, setOverrideAwayScore] = useState<number | string>('');
   const [isSavingOverride, setIsSavingOverride] = useState<boolean>(false);
+
+  // Obtener los usuarios filtrados según la liga seleccionada
+  const filteredUsersForOverride = React.useMemo(() => {
+    if (!overrideLeagueCode) {
+      // Si no hay liga seleccionada, mostrar todos los usuarios que no son admin
+      return allUsers.filter(u => !u.isAdmin);
+    }
+    const targetLeague = leagues.find(l => l.code === overrideLeagueCode);
+    if (!targetLeague) return [];
+    const memberIds = targetLeague.members || [];
+    return allUsers.filter(u => !u.isAdmin && memberIds.includes(u.id));
+  }, [overrideLeagueCode, allUsers, leagues]);
 
   const handleSaveOverride = async () => {
     if (!onSaveUserForecast || !overrideUserId || !overrideMatchId || overrideHomeScore === '' || overrideAwayScore === '') return;
@@ -145,7 +158,7 @@ export default function AdminPanel({
         overrideMatchId,
         Number(overrideHomeScore),
         Number(overrideAwayScore),
-        currentLeague?.code || undefined
+        overrideLeagueCode || undefined
       );
       alert('¡Pronóstico registrado/corregido con éxito!');
       setOverrideUserId('');
@@ -839,7 +852,25 @@ export default function AdminPanel({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
+            {/* League Dropdown */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-bold text-slate-600">Seleccionar Liga</label>
+              <select
+                value={overrideLeagueCode}
+                onChange={(e) => {
+                  setOverrideLeagueCode(e.target.value);
+                  setOverrideUserId('');
+                }}
+                className="bg-white border border-slate-200 rounded-lg p-2 text-xs font-medium text-slate-800 focus:outline-none focus:border-indigo-500 cursor-pointer"
+              >
+                <option value="">Global (Sin Liga)</option>
+                {leagues.map(l => (
+                  <option key={l.code} value={l.code}>{l.name}</option>
+                ))}
+              </select>
+            </div>
+
             {/* User Dropdown */}
             <div className="flex flex-col gap-1.5">
               <label className="text-xs font-bold text-slate-600">Seleccionar Usuario</label>
@@ -849,7 +880,7 @@ export default function AdminPanel({
                 className="bg-white border border-slate-200 rounded-lg p-2 text-xs font-medium text-slate-800 focus:outline-none focus:border-indigo-500 cursor-pointer"
               >
                 <option value="">-- Seleccionar --</option>
-                {allUsers.filter(u => !u.isAdmin).map(user => (
+                {filteredUsersForOverride.map(user => (
                   <option key={user.id} value={user.id}>{user.avatar} {user.name}</option>
                 ))}
               </select>
