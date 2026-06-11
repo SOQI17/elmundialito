@@ -19,6 +19,64 @@ import EditProfileModal from './components/Editprofilemodal';
 import OnboardingScreen from './components/Onboardingscreen';
 import ForceBootstrap from './components/Forcebootstrap';
 
+// Helper de conexión robusta con proxies en cascada y reintentos automáticos
+async function fetchMatchesData(feedUrl: string): Promise<any[]> {
+  const errors: string[] = [];
+
+  // 1. AllOrigins /get wrapper (envuelto, muy compatible)
+  try {
+    const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(feedUrl)}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.contents) {
+        return JSON.parse(data.contents);
+      }
+    } else {
+      errors.push(`AllOrigins /get (HTTP ${res.status})`);
+    }
+  } catch (e: any) {
+    errors.push(`AllOrigins /get: ${e.message}`);
+  }
+
+  // 2. Corsfix (proxy rápido, directo y con alta disponibilidad)
+  try {
+    const res = await fetch(`https://proxy.corsfix.com/?url=${encodeURIComponent(feedUrl)}`);
+    if (res.ok) {
+      return await res.json();
+    } else {
+      errors.push(`Corsfix (HTTP ${res.status})`);
+    }
+  } catch (e: any) {
+    errors.push(`Corsfix: ${e.message}`);
+  }
+
+  // 3. Corsproxy.io (usando formato de parámetro ?url= correcto)
+  try {
+    const res = await fetch(`https://corsproxy.io/?url=${encodeURIComponent(feedUrl)}`);
+    if (res.ok) {
+      return await res.json();
+    } else {
+      errors.push(`Corsproxy.io (HTTP ${res.status})`);
+    }
+  } catch (e: any) {
+    errors.push(`Corsproxy.io: ${e.message}`);
+  }
+
+  // 4. Petición directa (por si el feedUrl soporta CORS de forma nativa)
+  try {
+    const res = await fetch(feedUrl);
+    if (res.ok) {
+      return await res.json();
+    } else {
+      errors.push(`Direct Fetch (HTTP ${res.status})`);
+    }
+  } catch (e: any) {
+    errors.push(`Direct Fetch: ${e.message}`);
+  }
+
+  throw new Error(`Todos los proxies fallaron. Detalle: [${errors.join(' | ')}]`);
+}
+
 const ADMIN_EMAIL = 'alexisguerra9577@gmail.com';
 
 const isAdminEmail = (email: string | null | undefined): boolean => {
@@ -206,53 +264,10 @@ export default function App() {
         const customFeedUrl = 'https://worldcupjson.net/matches';
         let apiMatches: any[] = [];
         try {
-          const proxiedUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(customFeedUrl)}`;
-          const res = await fetch(proxiedUrl);
-          if (res.ok) {
-            const wrapper = await res.json();
-            if (wrapper && wrapper.contents) {
-              apiMatches = JSON.parse(wrapper.contents);
-            } else {
-              throw new Error('La respuesta del proxy no contiene datos válidos.');
-            }
-          } else {
-            throw new Error(`HTTP ${res.status}`);
-          }
-        } catch (errAllOriginsGet) {
-          console.warn('Background sync: Intento con AllOrigins /get fallido, intentando petición directa...', errAllOriginsGet);
-          try {
-            const res = await fetch(customFeedUrl);
-            if (res.ok) {
-              apiMatches = await res.json();
-            } else {
-              throw new Error(`HTTP ${res.status}`);
-            }
-          } catch (directErr) {
-            console.warn('Background sync: Petición directa fallida, intentando con AllOrigins /raw...', directErr);
-            try {
-              const proxiedUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(customFeedUrl)}`;
-              const res = await fetch(proxiedUrl);
-              if (res.ok) {
-                apiMatches = await res.json();
-              } else {
-                throw new Error(`HTTP ${res.status}`);
-              }
-            } catch (rawErr) {
-              console.warn('Background sync: AllOrigins /raw fallido, intentando con corsproxy.io...', rawErr);
-              try {
-                const proxiedUrl = `https://corsproxy.io/?${encodeURIComponent(customFeedUrl)}`;
-                const res = await fetch(proxiedUrl);
-                if (res.ok) {
-                  apiMatches = await res.json();
-                } else {
-                  throw new Error(`HTTP ${res.status}`);
-                }
-              } catch (corsProxyErr) {
-                console.error('Background sync: Todos los intentos de red fallaron.');
-                return;
-              }
-            }
-          }
+          apiMatches = await fetchMatchesData(customFeedUrl);
+        } catch (syncErr: any) {
+          console.error('Background sync: Todos los intentos de red fallaron.', syncErr.message);
+          return;
         }
         if (!Array.isArray(apiMatches)) return;
 

@@ -3,6 +3,64 @@ import { Match, MatchPhase, League, LeagueMemberInfo, UserProfile } from '../typ
 import { Settings, Save, RefreshCw, AlertTriangle, Play, CheckCircle, Globe, Wifi, Check, Sparkles, Loader2, Link2, AlertCircle, Trash2, Edit3, Users } from 'lucide-react';
 import TeamFlag from './TeamFlag';
 
+// Helper de conexión robusta con proxies en cascada y reintentos automáticos
+async function fetchMatchesData(feedUrl: string): Promise<any[]> {
+  const errors: string[] = [];
+
+  // 1. AllOrigins /get wrapper (envuelto, muy compatible)
+  try {
+    const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(feedUrl)}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.contents) {
+        return JSON.parse(data.contents);
+      }
+    } else {
+      errors.push(`AllOrigins /get (HTTP ${res.status})`);
+    }
+  } catch (e: any) {
+    errors.push(`AllOrigins /get: ${e.message}`);
+  }
+
+  // 2. Corsfix (proxy rápido, directo y con alta disponibilidad)
+  try {
+    const res = await fetch(`https://proxy.corsfix.com/?url=${encodeURIComponent(feedUrl)}`);
+    if (res.ok) {
+      return await res.json();
+    } else {
+      errors.push(`Corsfix (HTTP ${res.status})`);
+    }
+  } catch (e: any) {
+    errors.push(`Corsfix: ${e.message}`);
+  }
+
+  // 3. Corsproxy.io (usando formato de parámetro ?url= correcto)
+  try {
+    const res = await fetch(`https://corsproxy.io/?url=${encodeURIComponent(feedUrl)}`);
+    if (res.ok) {
+      return await res.json();
+    } else {
+      errors.push(`Corsproxy.io (HTTP ${res.status})`);
+    }
+  } catch (e: any) {
+    errors.push(`Corsproxy.io: ${e.message}`);
+  }
+
+  // 4. Petición directa (por si el feedUrl soporta CORS de forma nativa)
+  try {
+    const res = await fetch(feedUrl);
+    if (res.ok) {
+      return await res.json();
+    } else {
+      errors.push(`Direct Fetch (HTTP ${res.status})`);
+    }
+  } catch (e: any) {
+    errors.push(`Direct Fetch: ${e.message}`);
+  }
+
+  throw new Error(`Todos los proxies fallaron. Detalle: [${errors.join(' | ')}]`);
+}
+
 interface AdminPanelProps {
   matches: Match[];
   onUpdateMatchResult: (matchId: string, homeScore: number | undefined, awayScore: number | undefined, status: Match['status'], mode?: Match['mode'], liveStartTimestamp?: number | null, incidents?: Match['incidents']) => void;
@@ -70,56 +128,8 @@ export default function AdminPanel({
           }
         ];
       } else {
-        // Estrategia robusta multi-intento para evitar errores 403 de CORS y red
-        // Intento 1: Proxy AllOrigins /get wrapper (más confiable y menos bloqueado por Cloudflare)
-        try {
-          const proxiedUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(customFeedUrl)}`;
-          const res = await fetch(proxiedUrl);
-          if (res.ok) {
-            const wrapper = await res.json();
-            if (wrapper && wrapper.contents) {
-              apiMatches = JSON.parse(wrapper.contents);
-            } else {
-              throw new Error('La respuesta del proxy no contiene datos válidos.');
-            }
-          } else {
-            throw new Error(`HTTP ${res.status}`);
-          }
-        } catch (errAllOriginsGet) {
-          console.warn('Intento con AllOrigins /get fallido, intentando petición directa...', errAllOriginsGet);
-          try {
-            const res = await fetch(customFeedUrl);
-            if (res.ok) {
-              apiMatches = await res.json();
-            } else {
-              throw new Error(`HTTP ${res.status}`);
-            }
-          } catch (directErr) {
-            console.warn('Petición directa fallida, intentando con AllOrigins /raw...', directErr);
-            try {
-              const proxiedUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(customFeedUrl)}`;
-              const res = await fetch(proxiedUrl);
-              if (res.ok) {
-                apiMatches = await res.json();
-              } else {
-                throw new Error(`HTTP ${res.status}`);
-              }
-            } catch (rawErr) {
-              console.warn('AllOrigins /raw fallido, intentando con corsproxy.io...', rawErr);
-              try {
-                const proxiedUrl = `https://corsproxy.io/?${encodeURIComponent(customFeedUrl)}`;
-                const res = await fetch(proxiedUrl);
-                if (res.ok) {
-                  apiMatches = await res.json();
-                } else {
-                  throw new Error(`HTTP ${res.status}`);
-                }
-              } catch (corsProxyErr) {
-                throw new Error('Todos los intentos de conexión directa y por proxy CORS fallaron (403 / Bloqueo).');
-              }
-            }
-          }
-        }
+        // Consultar usando el helper robusto con proxies redundantes en cascada
+        apiMatches = await fetchMatchesData(customFeedUrl);
       }
 
       if (!Array.isArray(apiMatches)) {
