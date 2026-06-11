@@ -97,11 +97,23 @@ export default function LiveMatchSimulator({
 
   // CALCULO DE TIEMPO TRANSCURRIDO PARA MODO REALTIME
   const getElapsedRealTimeMinute = (): number => {
-    if (!match.liveStartTimestamp) return 0;
-    const diffMs = Date.now() - match.liveStartTimestamp;
-    const calculatedMinutes = Math.floor(diffMs / 60000); // 60,000ms = 1 minuto real
-    if (calculatedMinutes > 120) return 120; // Límite de tiempo extra máximo
-    return Math.max(0, calculatedMinutes);
+    if (match.liveStartTimestamp) {
+      const diffMs = Date.now() - match.liveStartTimestamp;
+      const calculatedMinutes = Math.floor(diffMs / 60000); // 60,000ms = 1 minuto real
+      if (calculatedMinutes > 120) return 120; // Límite de tiempo extra máximo
+      return Math.max(0, calculatedMinutes);
+    }
+
+    // Si no hay timestamp de inicio manual, calcular basándose en el horario oficial de inicio del partido (kickoff)
+    const kickoff = new Date(match.dateTime).getTime();
+    const diffMs = Date.now() - kickoff;
+    const diffMinutes = Math.floor(diffMs / 60000);
+
+    if (diffMinutes < 0) return 0;
+    if (diffMinutes <= 45) return diffMinutes;
+    if (diffMinutes <= 60) return 45; // Entretiempo (mostramos 45')
+    if (diffMinutes <= 105) return diffMinutes - 15; // Segundo tiempo (se restan 15' de entretiempo)
+    return 90; // Finalizado / Tiempo reglamentario cumplido
   };
 
   // Inicializar simulación rápida con marcadores actuales
@@ -612,17 +624,19 @@ export default function LiveMatchSimulator({
 
               {/* Game Minute Timer Display */}
               <div className="mt-3.5 flex flex-col items-center">
-                <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-mono font-bold text-[10px] px-3.5 py-1 rounded-full flex items-center gap-1.5">
-                  <span className={`w-2 h-2 rounded-full bg-emerald-500 ${isPlaying || (currentMode === 'realtime' && match.status === 'live') ? 'animate-pulse' : ''}`}></span>
+                <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-mono font-bold text-[10px] px-3.5 py-1 rounded-full flex items-center gap-1.5 animate-fadeIn">
+                  <span className={`w-2 h-2 rounded-full bg-emerald-500 ${match.status === 'live' ? 'animate-pulse' : ''}`}></span>
                   <span>
-                    {match.status === 'finished' ? 'FINALIZADO' : `MINUTO ${gameMinute}'`}
+                    {match.status === 'finished' 
+                      ? 'FINALIZADO' 
+                      : (match.status === 'live' && !match.liveStartTimestamp && Math.floor((Date.now() - new Date(match.dateTime).getTime()) / 60000) > 45 && Math.floor((Date.now() - new Date(match.dateTime).getTime()) / 60000) <= 60
+                        ? 'ENTREETIEMPO' 
+                        : `MINUTO ${gameMinute}'`
+                      )}
                   </span>
                 </div>
-                {currentMode === 'realtime' && !match.liveStartTimestamp && match.status === 'live' && (
-                  <span className="text-rose-400 text-[8px] font-bold uppercase tracking-wider mt-1 animate-pulse">Patea el árbitro para arrancar</span>
-                )}
-                {gameMinute === 45 && (
-                  <span className="text-amber-400 text-[9px] font-bold uppercase tracking-wider mt-1">Intermedio</span>
+                {!match.liveStartTimestamp && match.status === 'live' && Math.floor((Date.now() - new Date(match.dateTime).getTime()) / 60000) < 0 && (
+                  <span className="text-rose-400 text-[8px] font-bold uppercase tracking-wider mt-1 animate-pulse">El partido iniciará en el horario programado</span>
                 )}
               </div>
             </div>

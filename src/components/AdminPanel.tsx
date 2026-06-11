@@ -5,7 +5,7 @@ import TeamFlag from './TeamFlag';
 
 interface AdminPanelProps {
   matches: Match[];
-  onUpdateMatchResult: (matchId: string, homeScore: number | undefined, awayScore: number | undefined, status: Match['status']) => void;
+  onUpdateMatchResult: (matchId: string, homeScore: number | undefined, awayScore: number | undefined, status: Match['status'], mode?: Match['mode'], liveStartTimestamp?: number | null, incidents?: Match['incidents']) => void;
   onResetAllData: () => void;
   onTriggerBootstrap?: () => void;
   leagues?: League[];
@@ -143,7 +143,9 @@ export default function AdminPanel({
               localMatch.id,
               apiHomeScore !== undefined ? Number(apiHomeScore) : undefined,
               apiAwayScore !== undefined ? Number(apiAwayScore) : undefined,
-              mappedStatus
+              mappedStatus,
+              undefined,
+              null // Clear manual simulation liveStartTimestamp so it uses kickoff dateTime
             );
             updatedCount++;
           }
