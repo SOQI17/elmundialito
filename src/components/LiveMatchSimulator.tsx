@@ -24,8 +24,7 @@ export default function LiveMatchSimulator({
   onClose,
   onUpdateMatchResult
 }: LiveMatchSimulatorProps) {
-  // CONFIGURACIÓN DE MODO: fútbol real compartido vía Firebase
-  const currentMode = 'realtime';
+  const currentMode = 'realtime' as string;
 
   // Configuración de la simulación rápida (solo aplica en modo 'simulated')
   const [isPlaying, setIsPlaying] = useState(false);
@@ -824,40 +823,7 @@ export default function LiveMatchSimulator({
               </div>
             )}
 
-            {/* LIVE ACTION STATS METER */}
-            <div className="space-y-4">
-              <span className="text-[10px] uppercase font-black tracking-widest text-slate-400 block border-b border-slate-800 pb-1.5">
-                📊 Estadísticas del Encuentro (En Caliente)
-              </span>
 
-              {/* Possession % slider gauge */}
-              <div className="space-y-1.5">
-                <div className="flex justify-between items-center text-xs font-bold text-slate-300 uppercase">
-                  <span>Posesión: {stats.possessionHome}%</span>
-                  <span>{100 - stats.possessionHome}%</span>
-                </div>
-                <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden flex">
-                  <div className="bg-indigo-500 h-full transition-all duration-500" style={{ width: `${stats.possessionHome}%` }}></div>
-                  <div className="bg-amber-500 h-full transition-all duration-500" style={{ width: `${100 - stats.possessionHome}%` }}></div>
-                </div>
-              </div>
-
-              {/* GRID stats numbers */}
-              <div className="grid grid-cols-3 gap-y-3 border-t border-slate-805/30 pt-3 text-center text-xs">
-                <div className="font-extrabold text-white text-base font-mono">{stats.shotsHome}</div>
-                <div className="text-slate-450 uppercase tracking-wider text-[9px] font-black pt-1">💥 Total Remates</div>
-                <div className="font-extrabold text-white text-base font-mono">{stats.shotsAway}</div>
-
-                <div className="font-extrabold text-white text-base font-mono">{stats.foulsHome}</div>
-                <div className="text-slate-450 uppercase tracking-wider text-[9px] font-black pt-1">⚠️ Faltas Pitadas</div>
-                <div className="font-extrabold text-white text-base font-mono">{stats.foulsAway}</div>
-
-                <div className="font-extrabold text-white text-base font-mono">{stats.cornersHome}</div>
-                <div className="text-slate-450 uppercase tracking-wider text-[9px] font-black pt-1">📐 Tiros de Esquina</div>
-                <div className="font-extrabold text-white text-base font-mono">{stats.cornersAway}</div>
-              </div>
-            </div>
-            
             {/* INFORMATIVE CALLOUT */}
             <div className="bg-indigo-950/20 border border-indigo-900/30 text-indigo-200/90 p-4 rounded-xl flex items-start gap-2.5 text-[11px] leading-relaxed select-none">
               <AlertCircle className="w-4 h-4 shrink-0 text-indigo-400 mt-0.5" />

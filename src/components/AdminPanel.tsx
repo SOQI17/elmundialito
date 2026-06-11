@@ -71,35 +71,52 @@ export default function AdminPanel({
         ];
       } else {
         // Estrategia robusta multi-intento para evitar errores 403 de CORS y red
+        // Intento 1: Proxy AllOrigins /get wrapper (más confiable y menos bloqueado por Cloudflare)
         try {
-          const res = await fetch(customFeedUrl);
+          const proxiedUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(customFeedUrl)}`;
+          const res = await fetch(proxiedUrl);
           if (res.ok) {
-            apiMatches = await res.json();
+            const wrapper = await res.json();
+            if (wrapper && wrapper.contents) {
+              apiMatches = JSON.parse(wrapper.contents);
+            } else {
+              throw new Error('La respuesta del proxy no contiene datos válidos.');
+            }
           } else {
             throw new Error(`HTTP ${res.status}`);
           }
-        } catch (directErr) {
-          console.warn('Petición directa fallida, reintentando con proxy AllOrigins...');
+        } catch (errAllOriginsGet) {
+          console.warn('Intento con AllOrigins /get fallido, intentando petición directa...', errAllOriginsGet);
           try {
-            const proxiedUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(customFeedUrl)}`;
-            const res = await fetch(proxiedUrl);
+            const res = await fetch(customFeedUrl);
             if (res.ok) {
               apiMatches = await res.json();
             } else {
               throw new Error(`HTTP ${res.status}`);
             }
-          } catch (proxyErr1) {
-            console.warn('Proxy AllOrigins fallido, reintentando con corsproxy.io (formato correcto)...');
+          } catch (directErr) {
+            console.warn('Petición directa fallida, intentando con AllOrigins /raw...', directErr);
             try {
-              const proxiedUrl = `https://corsproxy.io/?${encodeURIComponent(customFeedUrl)}`;
+              const proxiedUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(customFeedUrl)}`;
               const res = await fetch(proxiedUrl);
               if (res.ok) {
                 apiMatches = await res.json();
               } else {
                 throw new Error(`HTTP ${res.status}`);
               }
-            } catch (proxyErr2) {
-              throw new Error('Todos los intentos de conexión directa y por proxy CORS fallaron (403 / Bloqueo).');
+            } catch (rawErr) {
+              console.warn('AllOrigins /raw fallido, intentando con corsproxy.io...', rawErr);
+              try {
+                const proxiedUrl = `https://corsproxy.io/?${encodeURIComponent(customFeedUrl)}`;
+                const res = await fetch(proxiedUrl);
+                if (res.ok) {
+                  apiMatches = await res.json();
+                } else {
+                  throw new Error(`HTTP ${res.status}`);
+                }
+              } catch (corsProxyErr) {
+                throw new Error('Todos los intentos de conexión directa y por proxy CORS fallaron (403 / Bloqueo).');
+              }
             }
           }
         }

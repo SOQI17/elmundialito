@@ -206,35 +206,51 @@ export default function App() {
         const customFeedUrl = 'https://worldcupjson.net/matches';
         let apiMatches: any[] = [];
         try {
-          const res = await fetch(customFeedUrl);
+          const proxiedUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(customFeedUrl)}`;
+          const res = await fetch(proxiedUrl);
           if (res.ok) {
-            apiMatches = await res.json();
+            const wrapper = await res.json();
+            if (wrapper && wrapper.contents) {
+              apiMatches = JSON.parse(wrapper.contents);
+            } else {
+              throw new Error('La respuesta del proxy no contiene datos válidos.');
+            }
           } else {
             throw new Error(`HTTP ${res.status}`);
           }
-        } catch (directErr) {
-          console.warn('Background sync: Petición directa fallida, reintentando con proxy AllOrigins...');
+        } catch (errAllOriginsGet) {
+          console.warn('Background sync: Intento con AllOrigins /get fallido, intentando petición directa...', errAllOriginsGet);
           try {
-            const proxiedUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(customFeedUrl)}`;
-            const res = await fetch(proxiedUrl);
+            const res = await fetch(customFeedUrl);
             if (res.ok) {
               apiMatches = await res.json();
             } else {
               throw new Error(`HTTP ${res.status}`);
             }
-          } catch (proxyErr1) {
-            console.warn('Background sync: Proxy AllOrigins fallido, reintentando con corsproxy.io (formato correcto)...');
+          } catch (directErr) {
+            console.warn('Background sync: Petición directa fallida, intentando con AllOrigins /raw...', directErr);
             try {
-              const proxiedUrl = `https://corsproxy.io/?${encodeURIComponent(customFeedUrl)}`;
+              const proxiedUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(customFeedUrl)}`;
               const res = await fetch(proxiedUrl);
               if (res.ok) {
                 apiMatches = await res.json();
               } else {
                 throw new Error(`HTTP ${res.status}`);
               }
-            } catch (proxyErr2) {
-              console.error('Background sync: Todos los intentos de red fallaron.');
-              return;
+            } catch (rawErr) {
+              console.warn('Background sync: AllOrigins /raw fallido, intentando con corsproxy.io...', rawErr);
+              try {
+                const proxiedUrl = `https://corsproxy.io/?${encodeURIComponent(customFeedUrl)}`;
+                const res = await fetch(proxiedUrl);
+                if (res.ok) {
+                  apiMatches = await res.json();
+                } else {
+                  throw new Error(`HTTP ${res.status}`);
+                }
+              } catch (corsProxyErr) {
+                console.error('Background sync: Todos los intentos de red fallaron.');
+                return;
+              }
             }
           }
         }
