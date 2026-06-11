@@ -70,17 +70,38 @@ export default function AdminPanel({
           }
         ];
       } else {
-        // Estrategia de doble petición: Directa primero, CORS Proxy después para máxima velocidad y evitar errores 408
+        // Estrategia robusta multi-intento para evitar errores 403 de CORS y red
         try {
           const res = await fetch(customFeedUrl);
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          apiMatches = await res.json();
+          if (res.ok) {
+            apiMatches = await res.json();
+          } else {
+            throw new Error(`HTTP ${res.status}`);
+          }
         } catch (directErr) {
-          console.warn('Petición directa bloqueada o fallida, reintentando con proxy CORS rápido...', directErr);
-          const proxiedUrl = `https://corsproxy.io/?url=${encodeURIComponent(customFeedUrl)}`;
-          const res = await fetch(proxiedUrl);
-          if (!res.ok) throw new Error(`Error de red/proxy HTTP: ${res.status}`);
-          apiMatches = await res.json();
+          console.warn('Petición directa fallida, reintentando con proxy AllOrigins...');
+          try {
+            const proxiedUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(customFeedUrl)}`;
+            const res = await fetch(proxiedUrl);
+            if (res.ok) {
+              apiMatches = await res.json();
+            } else {
+              throw new Error(`HTTP ${res.status}`);
+            }
+          } catch (proxyErr1) {
+            console.warn('Proxy AllOrigins fallido, reintentando con corsproxy.io (formato correcto)...');
+            try {
+              const proxiedUrl = `https://corsproxy.io/?${encodeURIComponent(customFeedUrl)}`;
+              const res = await fetch(proxiedUrl);
+              if (res.ok) {
+                apiMatches = await res.json();
+              } else {
+                throw new Error(`HTTP ${res.status}`);
+              }
+            } catch (proxyErr2) {
+              throw new Error('Todos los intentos de conexión directa y por proxy CORS fallaron (403 / Bloqueo).');
+            }
+          }
         }
       }
 
@@ -684,7 +705,7 @@ export default function AdminPanel({
                     <TeamFlag team={match.homeTeam} size="md" />
                     <span className="font-bold text-slate-800 text-xs w-20 truncate">{match.homeTeam.name}</span>
                     
-                    {match.status !== 'scheduled' && (match.homeScore !== undefined || match.awayScore !== undefined) ? (
+                    {match.homeScore !== undefined || match.awayScore !== undefined ? (
                       <span className="px-2 py-0.5 bg-slate-900 text-white font-mono font-extrabold text-[10px] rounded-md shadow-xs select-none flex items-center gap-1 mx-1">
                         {match.homeScore ?? 0} - {match.awayScore ?? 0}
                         {match.status === 'live' && (

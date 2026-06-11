@@ -204,10 +204,40 @@ export default function App() {
     const syncFeed = async () => {
       try {
         const customFeedUrl = 'https://worldcupjson.net/matches';
-        const proxiedUrl = `https://corsproxy.io/?url=${encodeURIComponent(customFeedUrl)}`;
-        const res = await fetch(proxiedUrl);
-        if (!res.ok) return;
-        const apiMatches = await res.json();
+        let apiMatches: any[] = [];
+        try {
+          const res = await fetch(customFeedUrl);
+          if (res.ok) {
+            apiMatches = await res.json();
+          } else {
+            throw new Error(`HTTP ${res.status}`);
+          }
+        } catch (directErr) {
+          console.warn('Background sync: Petición directa fallida, reintentando con proxy AllOrigins...');
+          try {
+            const proxiedUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(customFeedUrl)}`;
+            const res = await fetch(proxiedUrl);
+            if (res.ok) {
+              apiMatches = await res.json();
+            } else {
+              throw new Error(`HTTP ${res.status}`);
+            }
+          } catch (proxyErr1) {
+            console.warn('Background sync: Proxy AllOrigins fallido, reintentando con corsproxy.io (formato correcto)...');
+            try {
+              const proxiedUrl = `https://corsproxy.io/?${encodeURIComponent(customFeedUrl)}`;
+              const res = await fetch(proxiedUrl);
+              if (res.ok) {
+                apiMatches = await res.json();
+              } else {
+                throw new Error(`HTTP ${res.status}`);
+              }
+            } catch (proxyErr2) {
+              console.error('Background sync: Todos los intentos de red fallaron.');
+              return;
+            }
+          }
+        }
         if (!Array.isArray(apiMatches)) return;
 
         for (const apiM of apiMatches) {
