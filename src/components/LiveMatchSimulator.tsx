@@ -46,6 +46,60 @@ export default function LiveMatchSimulator({
     cornersAway: 3
   });
 
+  // Recalcular estadísticas basadas en los incidentes reales
+  useEffect(() => {
+    const list = currentMode === 'realtime' ? (match.incidents || []) : simIncidents;
+    
+    let goalsH = 0;
+    let goalsA = 0;
+    let shotsH = 0;
+    let shotsA = 0;
+    let foulsH = 0;
+    let foulsA = 0;
+    let cornersH = 0;
+    let cornersA = 0;
+
+    list.forEach(inc => {
+      if (inc.type === 'goal_home') {
+        goalsH++;
+        shotsH++;
+      } else if (inc.type === 'goal_away') {
+        goalsA++;
+        shotsA++;
+      } else if (inc.type === 'shot_miss') {
+        if (inc.title.includes(match.homeTeam.name)) {
+          shotsH++;
+        } else if (inc.title.includes(match.awayTeam.name)) {
+          shotsA++;
+        } else {
+          if (inc.minute % 2 === 0) shotsH++; else shotsA++;
+        }
+      } else if (inc.type === 'corner') {
+        if (inc.title.includes(match.homeTeam.name)) {
+          cornersH++;
+        } else if (inc.title.includes(match.awayTeam.name)) {
+          cornersA++;
+        } else {
+          if (inc.minute % 2 === 0) cornersH++; else cornersA++;
+        }
+      } else if (inc.type === 'foul' || inc.type.startsWith('yellow_') || inc.type.startsWith('red_')) {
+        const isHome = inc.type.endsWith('_home') || inc.title.includes(match.homeTeam.name);
+        if (isHome) foulsH++; else foulsA++;
+      }
+    });
+
+    // Fallbacks si no hay suficientes incidentes
+    setStats({
+      possessionHome: Math.max(20, Math.min(80, 50 + (goalsH - goalsA) * 3 + (shotsH - shotsA) * 2)),
+      shotsHome: Math.max(goalsH, shotsH || (match.homeScore ?? 0) * 2 + 1),
+      shotsAway: Math.max(goalsA, shotsA || (match.awayScore ?? 0) * 2),
+      foulsHome: Math.max(foulsH, 4),
+      foulsAway: Math.max(foulsA, 5),
+      cornersHome: Math.max(cornersH, 2),
+      cornersAway: Math.max(cornersA, 3)
+    });
+  }, [match.incidents, simIncidents, currentMode, match.homeScore, match.awayScore, match.homeTeam.name, match.awayTeam.name]);
+
   // Minuto actual unificado según el modo activo
   const [gameMinute, setGameMinute] = useState(0);
 
@@ -605,7 +659,7 @@ export default function LiveMatchSimulator({
             {/* Home team */}
             <div className="flex flex-col items-center text-center space-y-2">
               <span className="filter drop-shadow-md select-none" role="img" aria-label={match.homeTeam.name}>
-                <TeamFlag team={match.homeTeam} size="lg" />
+                <TeamFlag team={match.homeTeam} size="lg" interactive={false} />
               </span>
               <span className="font-extrabold text-sm sm:text-base tracking-tight text-white">{match.homeTeam.name}</span>
               <span className="text-[9px] bg-slate-800/80 border border-slate-750 text-slate-400 px-2 py-0.5 rounded-md uppercase font-bold">LOCAL</span>
@@ -645,7 +699,7 @@ export default function LiveMatchSimulator({
             {/* Away team */}
             <div className="flex flex-col items-center text-center space-y-2">
               <span className="filter drop-shadow-md select-none" role="img" aria-label={match.awayTeam.name}>
-                <TeamFlag team={match.awayTeam} size="lg" />
+                <TeamFlag team={match.awayTeam} size="lg" interactive={false} />
               </span>
               <span className="font-extrabold text-sm sm:text-base tracking-tight text-white">{match.awayTeam.name}</span>
               <span className="text-[9px] bg-slate-800/80 border border-slate-750 text-slate-400 px-2 py-0.5 rounded-md uppercase font-bold">VISITANTE</span>
@@ -727,6 +781,60 @@ export default function LiveMatchSimulator({
 
               <div className="absolute top-2.5 right-3.5 bg-indigo-950/80 border border-indigo-500/30 text-indigo-300 font-mono text-[8px] px-2 py-0.5 rounded-md tracking-wider">
                 {match.status === 'live' ? '⚡ TRANSMISIÓN EN VIVO' : '⏸️ RETRANSMISIÓN'}
+              </div>
+            </div>
+
+            {/* REAL-TIME MATCH STATISTICS */}
+            <div className="bg-slate-950/40 border border-slate-800 rounded-2xl p-4 space-y-4 shrink-0 shadow-inner" id="live-match-stats-panel">
+              <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-wider flex items-center gap-1.5 select-none">
+                📊 Estadísticas del Partido en Vivo
+              </h4>
+              
+              <div className="space-y-3">
+                {/* Possession */}
+                <div className="space-y-1">
+                  <div className="flex justify-between text-[10px] font-bold text-slate-400">
+                    <span>{stats.possessionHome}%</span>
+                    <span className="uppercase tracking-wider font-mono">Posesión</span>
+                    <span>{100 - stats.possessionHome}%</span>
+                  </div>
+                  <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden flex">
+                    <div className="bg-indigo-500 h-full transition-all duration-500" style={{ width: `${stats.possessionHome}%` }}></div>
+                    <div className="bg-slate-700 h-full grow transition-all duration-500"></div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                  {/* Shots */}
+                  <div className="bg-slate-900/50 border border-slate-800/80 rounded-xl p-2">
+                    <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Remates</span>
+                    <div className="flex justify-center items-center gap-2 mt-1">
+                      <strong className="text-white font-extrabold">{stats.shotsHome}</strong>
+                      <span className="text-slate-650 font-bold">:</span>
+                      <strong className="text-white font-extrabold">{stats.shotsAway}</strong>
+                    </div>
+                  </div>
+
+                  {/* Corners */}
+                  <div className="bg-slate-900/50 border border-slate-800/80 rounded-xl p-2">
+                    <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Córners</span>
+                    <div className="flex justify-center items-center gap-2 mt-1">
+                      <strong className="text-white font-extrabold">{stats.cornersHome}</strong>
+                      <span className="text-slate-650 font-bold">:</span>
+                      <strong className="text-white font-extrabold">{stats.cornersAway}</strong>
+                    </div>
+                  </div>
+
+                  {/* Fouls */}
+                  <div className="bg-slate-900/50 border border-slate-800/80 rounded-xl p-2">
+                    <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Faltas</span>
+                    <div className="flex justify-center items-center gap-2 mt-1">
+                      <strong className="text-white font-extrabold">{stats.foulsHome}</strong>
+                      <span className="text-slate-650 font-bold">:</span>
+                      <strong className="text-white font-extrabold">{stats.foulsAway}</strong>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 

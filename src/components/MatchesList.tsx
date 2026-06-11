@@ -711,19 +711,8 @@ export default function MatchesList({
                                 </div>
                               )}
 
-                              {match.status !== 'scheduled' && (
-                                <button
-                                  onClick={() => setSelectedLiveMatch(match)}
-                                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer w-full md:w-auto justify-center border ${
-                                    match.status === 'live'
-                                      ? 'bg-rose-600 hover:bg-rose-500 text-white border-rose-700 shadow-sm animate-pulse'
-                                      : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
-                                  }`}
-                                >
-                                  <Tv className="w-3.5 h-3.5" />
-                                  <span>{match.status === 'live' ? '🔴 En Vivo' : '📺 Ver Repetición'}</span>
-                                </button>
-                              )}
+
+                              
 
                               <button
                                 onClick={() => setExpandedMatchId(expandedMatchId === match.id ? null : match.id)}

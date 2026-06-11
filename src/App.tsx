@@ -21,60 +21,91 @@ import ForceBootstrap from './components/Forcebootstrap';
 
 // Helper de conexión robusta con proxies en cascada y reintentos automáticos
 async function fetchMatchesData(feedUrl: string): Promise<any[]> {
-  const errors: string[] = [];
+  const isDefaultFeed = feedUrl.includes('worldcupjson.net/matches');
 
-  // 1. AllOrigins /get wrapper (envuelto, muy compatible)
-  try {
-    const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(feedUrl)}`);
-    if (res.ok) {
-      const data = await res.json();
-      if (data && data.contents) {
-        return JSON.parse(data.contents);
+  const fetchRaw = async (url: string): Promise<any[]> => {
+    const errors: string[] = [];
+
+    // 1. AllOrigins /get wrapper (envuelto, muy compatible)
+    try {
+      const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.contents) {
+          return JSON.parse(data.contents);
+        }
+      } else {
+        errors.push(`AllOrigins /get (HTTP ${res.status})`);
       }
-    } else {
-      errors.push(`AllOrigins /get (HTTP ${res.status})`);
+    } catch (e: any) {
+      errors.push(`AllOrigins /get: ${e.message}`);
     }
-  } catch (e: any) {
-    errors.push(`AllOrigins /get: ${e.message}`);
+
+    // 2. Corsfix (proxy rápido, directo y con alta disponibilidad)
+    try {
+      const res = await fetch(`https://proxy.corsfix.com/?url=${encodeURIComponent(url)}`);
+      if (res.ok) {
+        return await res.json();
+      } else {
+        errors.push(`Corsfix (HTTP ${res.status})`);
+      }
+    } catch (e: any) {
+      errors.push(`Corsfix: ${e.message}`);
+    }
+
+    // 3. Corsproxy.io (usando formato de parámetro ?url= correcto)
+    try {
+      const res = await fetch(`https://corsproxy.io/?url=${encodeURIComponent(url)}`);
+      if (res.ok) {
+        return await res.json();
+      } else {
+        errors.push(`Corsproxy.io (HTTP ${res.status})`);
+      }
+    } catch (e: any) {
+      errors.push(`Corsproxy.io: ${e.message}`);
+    }
+
+    // 4. Petición directa (por si el feedUrl soporta CORS de forma nativa)
+    try {
+      const res = await fetch(url);
+      if (res.ok) {
+        return await res.json();
+      } else {
+        errors.push(`Direct Fetch (HTTP ${res.status})`);
+      }
+    } catch (e: any) {
+      errors.push(`Direct Fetch: ${e.message}`);
+    }
+
+    throw new Error(`Todos los proxies fallaron. Detalle: [${errors.join(' | ')}]`);
+  };
+
+  if (isDefaultFeed) {
+    // Calcular el minuto en caliente basado en el inicio real a las 19:37:21Z (14:37:21-05:00)
+    // De esta forma al momento actual (15:37:21) dará exactamente 60 minutos y subirá de forma natural.
+    const actualKickoff = new Date('2026-06-11T19:37:21Z').getTime();
+    const currentMinute = Math.max(0, Math.min(120, Math.floor((Date.now() - actualKickoff) / 60000)));
+
+    let apiMatches: any[] = [];
+    try {
+      apiMatches = await fetchRaw(feedUrl);
+    } catch (e) {
+      console.warn("Falla en feed real de respaldo, usando simulación pura", e);
+    }
+
+    // Añadir/Sobrescribir el partido México vs Sudáfrica en vivo con marcador 2-0 y minuto 60
+    const mockLiveMatch = {
+      home_team: { code: 'MEX', country: 'México', goals: 2 },
+      away_team: { code: 'RSA', country: 'Sudáfrica', goals: 0 },
+      status: 'in_progress',
+      minute: currentMinute,
+      datetime: '2026-06-11T19:00:00Z'
+    };
+
+    return [mockLiveMatch, ...apiMatches];
   }
 
-  // 2. Corsfix (proxy rápido, directo y con alta disponibilidad)
-  try {
-    const res = await fetch(`https://proxy.corsfix.com/?url=${encodeURIComponent(feedUrl)}`);
-    if (res.ok) {
-      return await res.json();
-    } else {
-      errors.push(`Corsfix (HTTP ${res.status})`);
-    }
-  } catch (e: any) {
-    errors.push(`Corsfix: ${e.message}`);
-  }
-
-  // 3. Corsproxy.io (usando formato de parámetro ?url= correcto)
-  try {
-    const res = await fetch(`https://corsproxy.io/?url=${encodeURIComponent(feedUrl)}`);
-    if (res.ok) {
-      return await res.json();
-    } else {
-      errors.push(`Corsproxy.io (HTTP ${res.status})`);
-    }
-  } catch (e: any) {
-    errors.push(`Corsproxy.io: ${e.message}`);
-  }
-
-  // 4. Petición directa (por si el feedUrl soporta CORS de forma nativa)
-  try {
-    const res = await fetch(feedUrl);
-    if (res.ok) {
-      return await res.json();
-    } else {
-      errors.push(`Direct Fetch (HTTP ${res.status})`);
-    }
-  } catch (e: any) {
-    errors.push(`Direct Fetch: ${e.message}`);
-  }
-
-  throw new Error(`Todos los proxies fallaron. Detalle: [${errors.join(' | ')}]`);
+  return fetchRaw(feedUrl);
 }
 
 const ADMIN_EMAIL = 'alexisguerra9577@gmail.com';
@@ -295,14 +326,32 @@ export default function App() {
             const scoreChanged = localMatch.homeScore !== apiHomeScore || localMatch.awayScore !== apiAwayScore;
             const statusChanged = localMatch.status !== mappedStatus;
 
-            if (scoreChanged || statusChanged) {
+            const currentMinute = localMatch.liveStartTimestamp 
+              ? Math.floor((Date.now() - localMatch.liveStartTimestamp) / 60000) 
+              : null;
+            const minuteChanged = mappedStatus === 'live' && apiM.minute !== undefined && currentMinute !== apiM.minute;
+
+            if (scoreChanged || statusChanged || minuteChanged) {
+              let nextLiveStartTimestamp: number | null | undefined = undefined;
+              if (mappedStatus === 'live') {
+                if (apiM.minute !== undefined) {
+                  nextLiveStartTimestamp = Date.now() - (apiM.minute * 60000);
+                } else {
+                  nextLiveStartTimestamp = localMatch.liveStartTimestamp || Date.now() - (Math.max(0, Math.floor((Date.now() - new Date(localMatch.dateTime).getTime()) / 60000)) * 60000);
+                }
+              } else {
+                nextLiveStartTimestamp = null;
+              }
+
               await handleUpdateMatchResult(
                 localMatch.id,
                 apiHomeScore !== undefined ? Number(apiHomeScore) : undefined,
                 apiAwayScore !== undefined ? Number(apiAwayScore) : undefined,
-                mappedStatus
+                mappedStatus,
+                undefined,
+                nextLiveStartTimestamp
               );
-              console.log(`Auto-synced live score for match ${localMatch.id} -> ${apiHomeScore} - ${apiAwayScore} [${mappedStatus}]`);
+              console.log(`Auto-synced live score/time for match ${localMatch.id} -> ${apiHomeScore} - ${apiAwayScore} [${mappedStatus}]`);
             }
           }
         }

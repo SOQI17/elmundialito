@@ -63,9 +63,10 @@ interface TeamFlagProps {
   team: { id: string; name: string; flag?: string };
   className?: string;
   size?: 'sm' | 'md' | 'lg' | 'xl';
+  interactive?: boolean;
 }
 
-export default function TeamFlag({ team, className = '', size = 'md' }: TeamFlagProps) {
+export default function TeamFlag({ team, className = '', size = 'md', interactive = true }: TeamFlagProps) {
   const [isOpen, setIsOpen] = useState(false);
   
   const isTbd = 
@@ -115,7 +116,7 @@ export default function TeamFlag({ team, className = '', size = 'md' }: TeamFlag
 
   const url = getTeamFlagUrl(team.id);
   const stats = TEAM_STATS[team.id.toUpperCase()];
-  const hasStats = !!stats;
+  const hasStats = interactive && !!stats;
 
   const flagImage = (
     <img

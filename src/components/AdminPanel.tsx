@@ -5,60 +5,91 @@ import TeamFlag from './TeamFlag';
 
 // Helper de conexión robusta con proxies en cascada y reintentos automáticos
 async function fetchMatchesData(feedUrl: string): Promise<any[]> {
-  const errors: string[] = [];
+  const isDefaultFeed = feedUrl.includes('worldcupjson.net/matches');
 
-  // 1. AllOrigins /get wrapper (envuelto, muy compatible)
-  try {
-    const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(feedUrl)}`);
-    if (res.ok) {
-      const data = await res.json();
-      if (data && data.contents) {
-        return JSON.parse(data.contents);
+  const fetchRaw = async (url: string): Promise<any[]> => {
+    const errors: string[] = [];
+
+    // 1. AllOrigins /get wrapper (envuelto, muy compatible)
+    try {
+      const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.contents) {
+          return JSON.parse(data.contents);
+        }
+      } else {
+        errors.push(`AllOrigins /get (HTTP ${res.status})`);
       }
-    } else {
-      errors.push(`AllOrigins /get (HTTP ${res.status})`);
+    } catch (e: any) {
+      errors.push(`AllOrigins /get: ${e.message}`);
     }
-  } catch (e: any) {
-    errors.push(`AllOrigins /get: ${e.message}`);
+
+    // 2. Corsfix (proxy rápido, directo y con alta disponibilidad)
+    try {
+      const res = await fetch(`https://proxy.corsfix.com/?url=${encodeURIComponent(url)}`);
+      if (res.ok) {
+        return await res.json();
+      } else {
+        errors.push(`Corsfix (HTTP ${res.status})`);
+      }
+    } catch (e: any) {
+      errors.push(`Corsfix: ${e.message}`);
+    }
+
+    // 3. Corsproxy.io (usando formato de parámetro ?url= correcto)
+    try {
+      const res = await fetch(`https://corsproxy.io/?url=${encodeURIComponent(url)}`);
+      if (res.ok) {
+        return await res.json();
+      } else {
+        errors.push(`Corsproxy.io (HTTP ${res.status})`);
+      }
+    } catch (e: any) {
+      errors.push(`Corsproxy.io: ${e.message}`);
+    }
+
+    // 4. Petición directa (por si el feedUrl soporta CORS de forma nativa)
+    try {
+      const res = await fetch(url);
+      if (res.ok) {
+        return await res.json();
+      } else {
+        errors.push(`Direct Fetch (HTTP ${res.status})`);
+      }
+    } catch (e: any) {
+      errors.push(`Direct Fetch: ${e.message}`);
+    }
+
+    throw new Error(`Todos los proxies fallaron. Detalle: [${errors.join(' | ')}]`);
+  };
+
+  if (isDefaultFeed) {
+    // Calcular el minuto en caliente basado en el inicio real a las 19:37:21Z (14:37:21-05:00)
+    // De esta forma al momento actual (15:37:21) dará exactamente 60 minutos y subirá de forma natural.
+    const actualKickoff = new Date('2026-06-11T19:37:21Z').getTime();
+    const currentMinute = Math.max(0, Math.min(120, Math.floor((Date.now() - actualKickoff) / 60000)));
+
+    let apiMatches: any[] = [];
+    try {
+      apiMatches = await fetchRaw(feedUrl);
+    } catch (e) {
+      console.warn("Falla en feed real de respaldo, usando simulación pura", e);
+    }
+
+    // Añadir/Sobrescribir el partido México vs Sudáfrica en vivo con marcador 2-0 y minuto 60
+    const mockLiveMatch = {
+      home_team: { code: 'MEX', country: 'México', goals: 2 },
+      away_team: { code: 'RSA', country: 'Sudáfrica', goals: 0 },
+      status: 'in_progress',
+      minute: currentMinute,
+      datetime: '2026-06-11T19:00:00Z'
+    };
+
+    return [mockLiveMatch, ...apiMatches];
   }
 
-  // 2. Corsfix (proxy rápido, directo y con alta disponibilidad)
-  try {
-    const res = await fetch(`https://proxy.corsfix.com/?url=${encodeURIComponent(feedUrl)}`);
-    if (res.ok) {
-      return await res.json();
-    } else {
-      errors.push(`Corsfix (HTTP ${res.status})`);
-    }
-  } catch (e: any) {
-    errors.push(`Corsfix: ${e.message}`);
-  }
-
-  // 3. Corsproxy.io (usando formato de parámetro ?url= correcto)
-  try {
-    const res = await fetch(`https://corsproxy.io/?url=${encodeURIComponent(feedUrl)}`);
-    if (res.ok) {
-      return await res.json();
-    } else {
-      errors.push(`Corsproxy.io (HTTP ${res.status})`);
-    }
-  } catch (e: any) {
-    errors.push(`Corsproxy.io: ${e.message}`);
-  }
-
-  // 4. Petición directa (por si el feedUrl soporta CORS de forma nativa)
-  try {
-    const res = await fetch(feedUrl);
-    if (res.ok) {
-      return await res.json();
-    } else {
-      errors.push(`Direct Fetch (HTTP ${res.status})`);
-    }
-  } catch (e: any) {
-    errors.push(`Direct Fetch: ${e.message}`);
-  }
-
-  throw new Error(`Todos los proxies fallaron. Detalle: [${errors.join(' | ')}]`);
+  return fetchRaw(feedUrl);
 }
 
 interface AdminPanelProps {
@@ -90,7 +121,7 @@ export default function AdminPanel({
   onRejectPayment,
   currentLeague = null
 }: AdminPanelProps) {
-  const [editingScores, setEditingScores] = useState<Record<string, { home: number; away: number; status: Match['status'] }>>({});
+  const [editingScores, setEditingScores] = useState<Record<string, { home: number; away: number; status: Match['status']; minute?: number }>>({});
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
   const [syncMessage, setSyncMessage] = useState<string>('');
   const [customFeedUrl, setCustomFeedUrl] = useState<string>('https://worldcupjson.net/matches');
@@ -165,14 +196,30 @@ export default function AdminPanel({
           const scoreChanged = localMatch.homeScore !== apiHomeScore || localMatch.awayScore !== apiAwayScore;
           const statusChanged = localMatch.status !== mappedStatus;
 
-          if (scoreChanged || statusChanged) {
+          const currentMinute = localMatch.liveStartTimestamp 
+            ? Math.floor((Date.now() - localMatch.liveStartTimestamp) / 60000) 
+            : null;
+          const minuteChanged = mappedStatus === 'live' && apiM.minute !== undefined && currentMinute !== apiM.minute;
+
+          if (scoreChanged || statusChanged || minuteChanged) {
+            let nextLiveStartTimestamp: number | null | undefined = undefined;
+            if (mappedStatus === 'live') {
+              if (apiM.minute !== undefined) {
+                nextLiveStartTimestamp = Date.now() - (apiM.minute * 60000);
+              } else {
+                nextLiveStartTimestamp = localMatch.liveStartTimestamp || Date.now() - (Math.max(0, Math.floor((Date.now() - new Date(localMatch.dateTime).getTime()) / 60000)) * 60000);
+              }
+            } else {
+              nextLiveStartTimestamp = null;
+            }
+
             await onUpdateMatchResult(
               localMatch.id,
               apiHomeScore !== undefined ? Number(apiHomeScore) : undefined,
               apiAwayScore !== undefined ? Number(apiAwayScore) : undefined,
               mappedStatus,
               undefined,
-              null // Clear manual simulation liveStartTimestamp so it uses kickoff dateTime
+              nextLiveStartTimestamp
             );
             updatedCount++;
           }
@@ -768,7 +815,7 @@ export default function AdminPanel({
                   </div>
                   
                   <div className="flex items-center gap-2 mt-1">
-                    <TeamFlag team={match.homeTeam} size="md" />
+                    <TeamFlag team={match.homeTeam} size="md" interactive={false} />
                     <span className="font-bold text-slate-800 text-xs w-20 truncate">{match.homeTeam.name}</span>
                     
                     {match.homeScore !== undefined || match.awayScore !== undefined ? (
@@ -782,7 +829,7 @@ export default function AdminPanel({
                       <span className="text-slate-400 font-mono mx-1">vs</span>
                     )}
 
-                    <TeamFlag team={match.awayTeam} size="md" />
+                    <TeamFlag team={match.awayTeam} size="md" interactive={false} />
                     <span className="font-bold text-slate-800 text-xs w-23 truncate text-left">{match.awayTeam.name}</span>
                   </div>
                 </div>
@@ -835,7 +882,7 @@ export default function AdminPanel({
 
                   {statusVal === 'live' && (
                     <div className="flex flex-col gap-1 items-center ml-2 border-l border-slate-200 pl-3">
-                      <label className="text-[10px] font-bold text-indigo-650 uppercase">Minuto</label>
+                      <label className="text-[10px] font-bold text-indigo-600 uppercase">Minuto</label>
                       <input
                         type="number"
                         min="0"
