@@ -382,7 +382,7 @@ export default function App() {
     if (!db || !isRealAdmin || matches.length === 0) return;
     
     const targetMatch = matches.find(m => m.id === 'M_1');
-    if (targetMatch && (!targetMatch.incidents || targetMatch.incidents.length === 0 || targetMatch.status !== 'finished')) {
+    if (targetMatch && (!targetMatch.incidents || targetMatch.incidents.length < 7 || targetMatch.status !== 'finished')) {
       const realIncidents = [
         { minute: 0, type: 'start', title: 'Inicio del partido', description: '¡Rueda el balón en el Estadio Azteca! Comienza el partido de apertura de la Copa Mundial 2026.', timestamp: Date.now() },
         { minute: 9, type: 'goal_home', title: '¡GOL DE MÉXICO!', description: 'Julián Andrés Quiñones abre el marcador con un remate de cabeza tras un gran centro de Luis Chávez.', timestamp: Date.now() },
