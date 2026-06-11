@@ -313,6 +313,12 @@ export default function App() {
           });
 
           if (localMatch) {
+            // Si el partido local ya fue marcado como terminado (finished) por el admin,
+            // no permitimos que la sincronización automática de internet lo revierta.
+            if (localMatch.status === 'finished') {
+              continue;
+            }
+
             let mappedStatus: Match['status'] = 'scheduled';
             if (apiM.status === 'completed' || apiM.status === 'finished') {
               mappedStatus = 'finished';

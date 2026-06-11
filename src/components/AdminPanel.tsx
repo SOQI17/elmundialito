@@ -182,6 +182,12 @@ export default function AdminPanel({
         });
 
         if (localMatch) {
+          // Si el partido local ya fue marcado como terminado (finished) por el admin,
+          // no permitimos que la sincronización de internet lo revierta.
+          if (localMatch.status === 'finished') {
+            continue;
+          }
+
           // Mapear estado
           let mappedStatus: Match['status'] = 'scheduled';
           if (apiM.status === 'completed' || apiM.status === 'finished') {
