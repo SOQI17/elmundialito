@@ -714,7 +714,7 @@ export default function App() {
     } catch (err) { handleFirestoreError(err, OperationType.WRITE, `forecasts/${forecastId}`); }
   };
 
-  const handleUpdateMatchResult = async (matchId: string, homeScore: number | undefined, awayScore: number | undefined, status: Match['status'], mode?: Match['mode'], liveStartTimestamp?: number, incidents?: Match['incidents']) => {
+  const handleUpdateMatchResult = async (matchId: string, homeScore: number | undefined, awayScore: number | undefined, status: Match['status'], mode?: Match['mode'], liveStartTimestamp?: number | null, incidents?: Match['incidents']) => {
     try {
       const updateData: any = { homeScore: homeScore !== undefined ? Number(homeScore) : undefined, awayScore: awayScore !== undefined ? Number(awayScore) : undefined, status };
       if (mode !== undefined) updateData.mode = mode;

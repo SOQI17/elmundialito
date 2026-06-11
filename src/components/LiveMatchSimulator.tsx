@@ -96,30 +96,25 @@ export default function LiveMatchSimulator({
 
   // CALCULO DE TIEMPO TRANSCURRIDO PARA MODO REALTIME
   const getElapsedRealTimeMinute = (): number => {
-    const kickoff = new Date(match.dateTime).getTime();
-    const now = Date.now();
-
-    // Si la hora actual ya superó o igualó el inicio oficial del partido, ignoramos el start timestamp manual (que puede ser residual de simulaciones/pruebas anteriores)
-    if (now >= kickoff) {
-      const diffMs = now - kickoff;
-      const diffMinutes = Math.floor(diffMs / 60000);
-
-      if (diffMinutes < 0) return 0;
-      if (diffMinutes <= 45) return diffMinutes;
-      if (diffMinutes <= 60) return 45; // Entretiempo (mostramos 45')
-      if (diffMinutes <= 105) return diffMinutes - 15; // Segundo tiempo (se restan 15' de entretiempo)
-      return 90; // Finalizado / Tiempo reglamentario cumplido
-    }
-
-    // Si aún no es la hora de inicio oficial, pero el administrador lo inició manualmente temprano
+    // Si el administrador especificó/guardó una hora de inicio manual o ajustó el minuto actual
     if (match.liveStartTimestamp) {
-      const diffMs = now - match.liveStartTimestamp;
+      const diffMs = Date.now() - match.liveStartTimestamp;
       const calculatedMinutes = Math.floor(diffMs / 60000); // 60,000ms = 1 minuto real
       if (calculatedMinutes > 120) return 120; // Límite de tiempo extra máximo
       return Math.max(0, calculatedMinutes);
     }
 
-    return 0;
+    // Si no hay timestamp de inicio manual, calcular basándose en el horario oficial de inicio del partido (kickoff)
+    const kickoff = new Date(match.dateTime).getTime();
+    const now = Date.now();
+    const diffMs = now - kickoff;
+    const diffMinutes = Math.floor(diffMs / 60000);
+
+    if (diffMinutes < 0) return 0;
+    if (diffMinutes <= 45) return diffMinutes;
+    if (diffMinutes <= 60) return 45; // Entretiempo (mostramos 45')
+    if (diffMinutes <= 105) return diffMinutes - 15; // Segundo tiempo (se restan 15' de entretiempo)
+    return 90; // Finalizado / Tiempo reglamentario cumplido
   };
 
   // Inicializar simulación rápida con marcadores actuales
@@ -635,7 +630,7 @@ export default function LiveMatchSimulator({
                   <span>
                     {match.status === 'finished' 
                       ? 'FINALIZADO' 
-                      : (match.status === 'live' && (Date.now() >= new Date(match.dateTime).getTime() || !match.liveStartTimestamp) && Math.floor((Date.now() - new Date(match.dateTime).getTime()) / 60000) > 45 && Math.floor((Date.now() - new Date(match.dateTime).getTime()) / 60000) <= 60
+                      : (match.status === 'live' && !match.liveStartTimestamp && Math.floor((Date.now() - new Date(match.dateTime).getTime()) / 60000) > 45 && Math.floor((Date.now() - new Date(match.dateTime).getTime()) / 60000) <= 60
                         ? 'ENTREETIEMPO' 
                         : `MINUTO ${gameMinute}'`
                       )}

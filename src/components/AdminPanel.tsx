@@ -312,10 +312,40 @@ export default function AdminPanel({
     });
   };
 
+  const handleMinuteChange = (matchId: string, val: string, currentMatch: Match) => {
+    const currentEdit = editingScores[matchId] || {
+      home: currentMatch.homeScore !== undefined ? currentMatch.homeScore : 0,
+      away: currentMatch.awayScore !== undefined ? currentMatch.awayScore : 0,
+      status: currentMatch.status
+    };
+
+    const numVal = val === '' ? 0 : Math.max(0, Math.min(120, Number(val)));
+
+    setEditingScores({
+      ...editingScores,
+      [matchId]: {
+        ...currentEdit,
+        minute: numVal
+      }
+    });
+  };
+
   const handleSaveResult = (matchId: string, currentMatch: Match) => {
     const edit = editingScores[matchId];
     if (edit) {
-      onUpdateMatchResult(matchId, edit.home, edit.away, edit.status);
+      // Si el estado es live y se especificó/editó el minuto, calcular liveStartTimestamp
+      let calculatedTimestamp: number | null = null;
+      if (edit.status === 'live') {
+        const currentMinute = edit.minute !== undefined 
+          ? edit.minute 
+          : (currentMatch.liveStartTimestamp 
+            ? Math.max(0, Math.floor((Date.now() - currentMatch.liveStartTimestamp) / 60000))
+            : (Math.floor((Date.now() - new Date(currentMatch.dateTime).getTime()) / 60000) > 0 
+              ? Math.floor((Date.now() - new Date(currentMatch.dateTime).getTime()) / 60000) 
+              : 0));
+        calculatedTimestamp = Date.now() - (currentMinute * 60000);
+      }
+      onUpdateMatchResult(matchId, edit.home, edit.away, edit.status, undefined, calculatedTimestamp);
     } else {
       // Si no ha editado valores directamente pero hace clic, guardar con actuales
       onUpdateMatchResult(
@@ -705,6 +735,13 @@ export default function AdminPanel({
           const homeScoreVal = edit !== undefined ? edit.home : (match.homeScore !== undefined ? match.homeScore : 0);
           const awayScoreVal = edit !== undefined ? edit.away : (match.awayScore !== undefined ? match.awayScore : 0);
           const statusVal = edit !== undefined ? edit.status : match.status;
+          const minuteVal = edit !== undefined && edit.minute !== undefined 
+            ? edit.minute 
+            : (match.liveStartTimestamp 
+              ? Math.max(0, Math.floor((Date.now() - match.liveStartTimestamp) / 60000))
+              : (Math.floor((Date.now() - new Date(match.dateTime).getTime()) / 60000) > 0 
+                ? Math.max(0, Math.min(120, Math.floor((Date.now() - new Date(match.dateTime).getTime()) / 60000))) 
+                : 0));
 
           return (
             <div
@@ -795,6 +832,20 @@ export default function AdminPanel({
                       className="w-14 bg-white border border-slate-200 rounded-lg py-1.5 text-center font-mono font-bold text-slate-850 focus:outline-none focus:border-indigo-500 disabled:bg-slate-100 disabled:text-slate-400"
                     />
                   </div>
+
+                  {statusVal === 'live' && (
+                    <div className="flex flex-col gap-1 items-center ml-2 border-l border-slate-200 pl-3">
+                      <label className="text-[10px] font-bold text-indigo-650 uppercase">Minuto</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="120"
+                        value={minuteVal}
+                        onChange={(e) => handleMinuteChange(match.id, e.target.value, match)}
+                        className="w-14 bg-indigo-50 border border-indigo-200 rounded-lg py-1.5 text-center font-mono font-bold text-indigo-900 focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
+                  )}
                 </div>
 
                 {/* Save button */}
