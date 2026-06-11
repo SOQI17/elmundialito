@@ -197,6 +197,70 @@ export default function App() {
     backfillEmails();
   }, [isRealAdmin, users, offlineModeActive]);
 
+  // ── 2.6 Admin background live score synchronization ───────────
+  useEffect(() => {
+    if (!isRealAdmin || matches.length === 0 || offlineModeActive) return;
+
+    const syncFeed = async () => {
+      try {
+        const customFeedUrl = 'https://worldcupjson.net/matches';
+        const proxiedUrl = `https://corsproxy.io/?url=${encodeURIComponent(customFeedUrl)}`;
+        const res = await fetch(proxiedUrl);
+        if (!res.ok) return;
+        const apiMatches = await res.json();
+        if (!Array.isArray(apiMatches)) return;
+
+        for (const apiM of apiMatches) {
+          const localMatch = matches.find(m => {
+            const homeCode = apiM.home_team?.code;
+            const awayCode = apiM.away_team?.code;
+            if (!homeCode || !awayCode) return false;
+            return (m.homeTeam.id === homeCode && m.awayTeam.id === awayCode) ||
+                   (m.homeTeam.name.toLowerCase() === apiM.home_team?.country?.toLowerCase() &&
+                    m.awayTeam.name.toLowerCase() === apiM.away_team?.country?.toLowerCase());
+          });
+
+          if (localMatch) {
+            let mappedStatus: Match['status'] = 'scheduled';
+            if (apiM.status === 'completed' || apiM.status === 'finished') {
+              mappedStatus = 'finished';
+            } else if (apiM.status === 'in_progress' || apiM.status === 'live' || apiM.status === 'active') {
+              mappedStatus = 'live';
+            }
+
+            const apiHomeScore = apiM.home_team?.goals;
+            const apiAwayScore = apiM.away_team?.goals;
+
+            const scoreChanged = localMatch.homeScore !== apiHomeScore || localMatch.awayScore !== apiAwayScore;
+            const statusChanged = localMatch.status !== mappedStatus;
+
+            if (scoreChanged || statusChanged) {
+              await handleUpdateMatchResult(
+                localMatch.id,
+                apiHomeScore !== undefined ? Number(apiHomeScore) : undefined,
+                apiAwayScore !== undefined ? Number(apiAwayScore) : undefined,
+                mappedStatus
+              );
+              console.log(`Auto-synced live score for match ${localMatch.id} -> ${apiHomeScore} - ${apiAwayScore} [${mappedStatus}]`);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Background admin live sync failed:', err);
+      }
+    };
+
+    // Correr cada 2 minutos (120000 ms)
+    const interval = setInterval(syncFeed, 120000);
+    // Ejecución inicial ligera diferida a los 5 segundos
+    const timeout = setTimeout(syncFeed, 5000);
+
+    return () => {
+      clearInterval(interval);
+      clearTimeout(timeout);
+    };
+  }, [isRealAdmin, matches, offlineModeActive]);
+
   // ── 3. Matches sync ───────────────────────────────────────
   useEffect(() => {
     if (!authUser) return;
