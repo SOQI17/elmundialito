@@ -664,14 +664,37 @@ export default function AdminPanel({
               {/* Match Details */}
               <div className="flex items-center justify-between md:justify-start gap-4 w-full md:w-auto">
                 <div className="text-left">
-                  <span className="px-2 py-0.5 bg-slate-200 text-slate-700 font-bold text-[9px] rounded-md uppercase block w-max uppercase tracking-wider mb-1 font-mono">
-                    {match.phase}
-                  </span>
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <span className="px-2 py-0.5 bg-slate-200 text-slate-700 font-bold text-[9px] rounded-md uppercase block w-max uppercase tracking-wider font-mono">
+                      {match.phase}
+                    </span>
+                    {match.status === 'live' && (
+                      <span className="px-2 py-0.5 bg-rose-100 text-rose-700 font-bold text-[9px] rounded-md uppercase block w-max tracking-wider font-mono animate-pulse">
+                        🔴 EN VIVO
+                      </span>
+                    )}
+                    {match.status === 'finished' && (
+                      <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 font-bold text-[9px] rounded-md uppercase block w-max tracking-wider font-mono">
+                        ✓ TERMINADO
+                      </span>
+                    )}
+                  </div>
                   
                   <div className="flex items-center gap-2 mt-1">
                     <TeamFlag team={match.homeTeam} size="md" />
                     <span className="font-bold text-slate-800 text-xs w-20 truncate">{match.homeTeam.name}</span>
-                    <span className="text-slate-400 font-mono">vs</span>
+                    
+                    {match.status !== 'scheduled' && (match.homeScore !== undefined || match.awayScore !== undefined) ? (
+                      <span className="px-2 py-0.5 bg-slate-900 text-white font-mono font-extrabold text-[10px] rounded-md shadow-xs select-none flex items-center gap-1 mx-1">
+                        {match.homeScore ?? 0} - {match.awayScore ?? 0}
+                        {match.status === 'live' && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping inline-block"></span>
+                        )}
+                      </span>
+                    ) : (
+                      <span className="text-slate-400 font-mono mx-1">vs</span>
+                    )}
+
                     <TeamFlag team={match.awayTeam} size="md" />
                     <span className="font-bold text-slate-800 text-xs w-23 truncate text-left">{match.awayTeam.name}</span>
                   </div>
