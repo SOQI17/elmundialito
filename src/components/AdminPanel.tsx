@@ -105,6 +105,7 @@ interface AdminPanelProps {
   onApprovePayment?: (leagueCode: string, userId: string, amount: number) => Promise<void>;
   onRejectPayment?: (leagueCode: string, userId: string) => Promise<void>;
   currentLeague?: League | null;
+  onSaveUserForecast?: (userId: string, matchId: string, homeScore: number, awayScore: number, leagueCode?: string) => Promise<void>;
 }
 
 export default function AdminPanel({
@@ -119,13 +120,45 @@ export default function AdminPanel({
   allUsers = [],
   onApprovePayment,
   onRejectPayment,
-  currentLeague = null
+  currentLeague = null,
+  onSaveUserForecast
 }: AdminPanelProps) {
   const [editingScores, setEditingScores] = useState<Record<string, { home: number; away: number; status: Match['status']; minute?: number }>>({});
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
   const [syncMessage, setSyncMessage] = useState<string>('');
   const [customFeedUrl, setCustomFeedUrl] = useState<string>('https://worldcupjson.net/matches');
   const [showAdvancedSync, setShowAdvancedSync] = useState<boolean>(false);
+
+  // Estados para la corrección manual de pronósticos de usuario
+  const [overrideUserId, setOverrideUserId] = useState<string>('');
+  const [overrideMatchId, setOverrideMatchId] = useState<string>('');
+  const [overrideHomeScore, setOverrideHomeScore] = useState<number | string>('');
+  const [overrideAwayScore, setOverrideAwayScore] = useState<number | string>('');
+  const [isSavingOverride, setIsSavingOverride] = useState<boolean>(false);
+
+  const handleSaveOverride = async () => {
+    if (!onSaveUserForecast || !overrideUserId || !overrideMatchId || overrideHomeScore === '' || overrideAwayScore === '') return;
+    setIsSavingOverride(true);
+    try {
+      await onSaveUserForecast(
+        overrideUserId,
+        overrideMatchId,
+        Number(overrideHomeScore),
+        Number(overrideAwayScore),
+        currentLeague?.code || undefined
+      );
+      alert('¡Pronóstico registrado/corregido con éxito!');
+      setOverrideUserId('');
+      setOverrideMatchId('');
+      setOverrideHomeScore('');
+      setOverrideAwayScore('');
+    } catch (err: any) {
+      console.error(err);
+      alert(`⚠️ ERROR AL GUARDAR PRONÓSTICO EN FIRESTORE:\n\n${err.message || err}\n\nPor favor, verifica tus permisos o conexión.`);
+    } finally {
+      setIsSavingOverride(false);
+    }
+  };
 
   const handleSyncFromInternet = async (isSimulation: boolean = false) => {
     setSyncStatus('syncing');
@@ -383,36 +416,41 @@ export default function AdminPanel({
     });
   };
 
-  const handleSaveResult = (matchId: string, currentMatch: Match) => {
+  const handleSaveResult = async (matchId: string, currentMatch: Match) => {
     const edit = editingScores[matchId];
-    if (edit) {
-      // Si el estado es live y se especificó/editó el minuto, calcular liveStartTimestamp
-      let calculatedTimestamp: number | null = null;
-      if (edit.status === 'live') {
-        const currentMinute = edit.minute !== undefined 
-          ? edit.minute 
-          : (currentMatch.liveStartTimestamp 
-            ? Math.max(0, Math.floor((Date.now() - currentMatch.liveStartTimestamp) / 60000))
-            : (Math.floor((Date.now() - new Date(currentMatch.dateTime).getTime()) / 60000) > 0 
-              ? Math.floor((Date.now() - new Date(currentMatch.dateTime).getTime()) / 60000) 
-              : 0));
-        calculatedTimestamp = Date.now() - (currentMinute * 60000);
+    try {
+      if (edit) {
+        // Si el estado es live y se especificó/editó el minuto, calcular liveStartTimestamp
+        let calculatedTimestamp: number | null = null;
+        if (edit.status === 'live') {
+          const currentMinute = edit.minute !== undefined 
+            ? edit.minute 
+            : (currentMatch.liveStartTimestamp 
+              ? Math.max(0, Math.floor((Date.now() - currentMatch.liveStartTimestamp) / 60000))
+              : (Math.floor((Date.now() - new Date(currentMatch.dateTime).getTime()) / 60000) > 0 
+                ? Math.floor((Date.now() - new Date(currentMatch.dateTime).getTime()) / 60000) 
+                : 0));
+          calculatedTimestamp = Date.now() - (currentMinute * 60000);
+        }
+        await onUpdateMatchResult(matchId, edit.home, edit.away, edit.status, undefined, calculatedTimestamp);
+      } else {
+        // Si no ha editado valores directamente pero hace clic, guardar con actuales
+        await onUpdateMatchResult(
+          matchId, 
+          currentMatch.homeScore !== undefined ? currentMatch.homeScore : 0, 
+          currentMatch.awayScore !== undefined ? currentMatch.awayScore : 0, 
+          currentMatch.status
+        );
       }
-      onUpdateMatchResult(matchId, edit.home, edit.away, edit.status, undefined, calculatedTimestamp);
-    } else {
-      // Si no ha editado valores directamente pero hace clic, guardar con actuales
-      onUpdateMatchResult(
-        matchId, 
-        currentMatch.homeScore !== undefined ? currentMatch.homeScore : 0, 
-        currentMatch.awayScore !== undefined ? currentMatch.awayScore : 0, 
-        currentMatch.status
-      );
+      
+      // Quitar del estado local de edición activa para confirmar cambios visuales solo si tiene éxito
+      const copy = { ...editingScores };
+      delete copy[matchId];
+      setEditingScores(copy);
+    } catch (err: any) {
+      console.error("Error saving match result:", err);
+      alert(`⚠️ ERROR AL GUARDAR EN FIRESTORE:\n\n${err.message || err}\n\nPor favor, verifica tus permisos o conexión.`);
     }
-    
-    // Quitar del estado local de edición activa para confirmar cambios visuales
-    const copy = { ...editingScores };
-    delete copy[matchId];
-    setEditingScores(copy);
   };
 
   return (
@@ -777,6 +815,101 @@ export default function AdminPanel({
                 </div>
               );
             })}
+          </div>
+        </div>
+      )}
+
+      {/* Forecast Override Tool */}
+      {onSaveUserForecast && (
+        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-4" id="admin-forecast-override-card">
+          <div className="flex items-center gap-2 pb-3 border-b border-slate-200/60">
+            <div className="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
+              <Edit3 className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="font-bold text-slate-800 text-sm flex items-center gap-1.5 font-sans">
+                Corrección / Registro Manual de Pronóstico de Usuario
+                <span className="px-2 py-0.5 bg-amber-100 border border-amber-200 text-amber-800 text-[8px] font-black uppercase rounded-md tracking-wider">
+                  Admin Control
+                </span>
+              </h3>
+              <p className="text-[10px] text-slate-500 font-medium">
+                Permite al organizador registrar o corregir el pronóstico de cualquier participante para un partido específico.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+            {/* User Dropdown */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-bold text-slate-600">Seleccionar Usuario</label>
+              <select
+                value={overrideUserId}
+                onChange={(e) => setOverrideUserId(e.target.value)}
+                className="bg-white border border-slate-200 rounded-lg p-2 text-xs font-medium text-slate-800 focus:outline-none focus:border-indigo-500 cursor-pointer"
+              >
+                <option value="">-- Seleccionar --</option>
+                {allUsers.filter(u => !u.isAdmin).map(user => (
+                  <option key={user.id} value={user.id}>{user.avatar} {user.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Match Dropdown */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-bold text-slate-600">Seleccionar Partido</label>
+              <select
+                value={overrideMatchId}
+                onChange={(e) => setOverrideMatchId(e.target.value)}
+                className="bg-white border border-slate-200 rounded-lg p-2 text-xs font-medium text-slate-800 focus:outline-none focus:border-indigo-500 cursor-pointer"
+              >
+                <option value="">-- Seleccionar --</option>
+                {matches.map(match => (
+                  <option key={match.id} value={match.id}>
+                    {match.homeTeam.flag} {match.homeTeam.name} vs {match.awayTeam.name} {match.awayTeam.flag}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Scores input */}
+            <div className="flex items-center gap-3">
+              <div className="flex flex-col gap-1.5 w-20">
+                <label className="text-xs font-bold text-slate-600 text-center">Goles Local</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={overrideHomeScore}
+                  onChange={(e) => setOverrideHomeScore(e.target.value)}
+                  className="bg-white border border-slate-200 rounded-lg p-2 text-center font-mono font-bold text-slate-800 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+              <span className="font-bold text-slate-400 mt-6 select-none">:</span>
+              <div className="flex flex-col gap-1.5 w-20">
+                <label className="text-xs font-bold text-slate-600 text-center">Goles Vis.</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={overrideAwayScore}
+                  onChange={(e) => setOverrideAwayScore(e.target.value)}
+                  className="bg-white border border-slate-200 rounded-lg p-2 text-center font-mono font-bold text-slate-800 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+            </div>
+
+            {/* Action button */}
+            <button
+              onClick={handleSaveOverride}
+              disabled={isSavingOverride || !overrideUserId || !overrideMatchId || overrideHomeScore === '' || overrideAwayScore === ''}
+              className="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-xs shrink-0 cursor-pointer disabled:opacity-50 h-10"
+            >
+              {isSavingOverride ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Save className="w-3.5 h-3.5" />
+              )}
+              Registrar Pronóstico
+            </button>
           </div>
         </div>
       )}

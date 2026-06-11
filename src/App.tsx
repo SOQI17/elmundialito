@@ -769,6 +769,34 @@ export default function App() {
     } catch (err) { handleFirestoreError(err, OperationType.WRITE, `forecasts/${forecastId}`); }
   };
 
+  const handleSaveUserForecast = async (userId: string, matchId: string, homeScore: number, awayScore: number, leagueCode?: string) => {
+    const forecastId = leagueCode ? `${matchId}_${userId}_${leagueCode}` : `${matchId}_${userId}`;
+    const nowIso = new Date().toISOString();
+    
+    // update local state
+    setForecasts(prev => {
+      const idx = prev.findIndex(f => f.matchId === matchId && f.userId === userId && f.leagueCode === (leagueCode || undefined));
+      const updated = { matchId, userId, homeScore: Number(homeScore), awayScore: Number(awayScore), updatedAt: nowIso, leagueCode: leagueCode || undefined };
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = updated;
+        return next;
+      }
+      return [...prev, updated];
+    });
+
+    try {
+      await setDoc(doc(db, 'forecasts', forecastId), { 
+        matchId, 
+        userId, 
+        homeScore: Number(homeScore), 
+        awayScore: Number(awayScore), 
+        updatedAt: serverTimestamp(),
+        leagueCode: leagueCode || null
+      });
+    } catch (err) { handleFirestoreError(err, OperationType.WRITE, `forecasts/${forecastId}`); throw err; }
+  };
+
   const handleUpdateMatchResult = async (matchId: string, homeScore: number | undefined, awayScore: number | undefined, status: Match['status'], mode?: Match['mode'], liveStartTimestamp?: number | null, incidents?: Match['incidents']) => {
     try {
       const updateData: any = { homeScore: homeScore !== undefined ? Number(homeScore) : undefined, awayScore: awayScore !== undefined ? Number(awayScore) : undefined, status };
@@ -776,7 +804,10 @@ export default function App() {
       if (liveStartTimestamp !== undefined) updateData.liveStartTimestamp = liveStartTimestamp;
       if (incidents !== undefined) updateData.incidents = incidents;
       await setDoc(doc(db, 'matches', matchId), updateData, { merge: true });
-    } catch (err) { handleFirestoreError(err, OperationType.WRITE, `matches/${matchId}`); }
+    } catch (err) { 
+      handleFirestoreError(err, OperationType.WRITE, `matches/${matchId}`); 
+      throw err;
+    }
   };
 
   const handleResetData = async () => {
@@ -1360,6 +1391,7 @@ export default function App() {
               onApprovePayment={handleApprovePayment}
               onRejectPayment={handleRejectPayment}
               currentLeague={enrichedCurrentLeague}
+              onSaveUserForecast={handleSaveUserForecast}
             />
           )}
         </div>
