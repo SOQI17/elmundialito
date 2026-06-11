@@ -379,7 +379,7 @@ export default function App() {
 
   // Migración automática para el partido de México vs Sudáfrica con estadísticas e incidentes reales de Google
   useEffect(() => {
-    if (!db || !isRealAdmin || matches.length === 0) return;
+    if (!db || matches.length === 0) return;
     
     const targetMatch = matches.find(m => m.id === 'M_1');
     if (targetMatch && (!targetMatch.incidents || targetMatch.incidents.length < 7 || targetMatch.status !== 'finished')) {
@@ -402,7 +402,7 @@ export default function App() {
       .then(() => console.log('✅ Migración: Partido M_1 actualizado con goles e incidentes reales.'))
       .catch(err => console.error('Error al migrar M_1:', err));
     }
-  }, [db, isRealAdmin, matches]);
+  }, [db, matches]);
 
   // ── 3. Matches sync ───────────────────────────────────────
   useEffect(() => {
@@ -1426,9 +1426,12 @@ export default function App() {
 
       {/* Footer */}
       <div className="bg-slate-100 border-t border-slate-200/60 py-4 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full flex flex-col sm:flex-row justify-between items-center gap-3 text-xs text-slate-500 font-medium">
-        <span className="flex items-center gap-1">
+        <span className="flex items-center gap-1.5 flex-wrap">
           <Lightbulb className="w-4 h-4 text-emerald-600 shrink-0" />
-          Mundial 2026: Pronósticos sincronizados en tiempo real con Firestore.
+          <span>Mundial 2026: Pronósticos sincronizados en tiempo real con Firestore.</span>
+          <span className="px-2 py-0.5 bg-indigo-50 border border-indigo-200 rounded text-indigo-700 font-bold font-mono text-[10px]">
+            Sesión: {authUser?.email || 'Desconectado'} ({isRealAdmin ? 'Admin 👑' : 'Usuario 👤'})
+          </span>
         </span>
         <span className="text-[10px] text-slate-400 font-mono uppercase">© Mundialito 2026 · Firebase</span>
       </div>
