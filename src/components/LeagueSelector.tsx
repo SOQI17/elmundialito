@@ -22,6 +22,7 @@ interface LeagueSelectorProps {
   realUserId?: string;
   realUserEmail?: string;
   onUpdateMemberPayment?: (leagueCode: string, userId: string, paid: boolean, paymentStatus: LeagueMemberInfo['paymentStatus'], paymentMethod?: LeagueMemberInfo['paymentMethod'], amount?: number) => Promise<void>;
+  onRemoveMember?: (leagueCode: string, userId: string) => Promise<void>;
 }
 
 const AVATARS = ['🦁', '🦊', '🐻', '🐼', '🐨', '🐱', '🐶', '🐯', '🐴', '🦄', '🦅', '🦉', '⚽', '🏆'];
@@ -43,7 +44,8 @@ export default function LeagueSelector({
   leagueMembersData,
   realUserId,
   realUserEmail,
-  onUpdateMemberPayment
+  onUpdateMemberPayment,
+  onRemoveMember
 }: LeagueSelectorProps) {
   const isAdmin = currentUser.isAdmin || (realUserEmail ? (
     realUserEmail.toLowerCase() === 'alexisguerra9577@gmail.com' ||
@@ -663,6 +665,19 @@ export default function LeagueSelector({
                               className="px-3 py-1.5 bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-700 font-extrabold text-[10px] rounded-lg transition-all cursor-pointer shadow-3xs flex items-center gap-1"
                             >
                               💵 Pagó Efectivo
+                            </button>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (window.confirm(`¿Seguro que deseas eliminar a ${member.name} de la liga? Perderá el acceso a este grupo.`)) {
+                                  if (onRemoveMember) {
+                                    await onRemoveMember(currentLeague.code, member.id);
+                                  }
+                                }
+                              }}
+                              className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-[10px] rounded-lg transition-all cursor-pointer shadow-3xs flex items-center gap-1"
+                            >
+                              ❌ Eliminar Jugador
                             </button>
                           </>
                         )}

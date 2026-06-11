@@ -760,6 +760,14 @@ export default function App() {
     }
   };
 
+  const handleRemoveMember = async (leagueCode: string, userId: string) => {
+    try {
+      await deleteDoc(doc(db, 'leagues', leagueCode, 'members', userId));
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, `leagues/${leagueCode}/members/${userId}`);
+    }
+  };
+
   const handleLogout = async () => {
     try { await signOut(auth); setCurrentUser(null); } catch (err) { console.error(err); }
   };
@@ -1154,6 +1162,7 @@ export default function App() {
               realUserId={authUser?.uid}
               realUserEmail={authUser?.email || ''}
               onUpdateMemberPayment={handleUpdateMemberPayment}
+              onRemoveMember={handleRemoveMember}
             />
           )}
           {activeTab === 'sandbox' && <InteractiveSandbox />}
