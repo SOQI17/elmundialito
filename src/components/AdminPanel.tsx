@@ -106,6 +106,7 @@ interface AdminPanelProps {
   onRejectPayment?: (leagueCode: string, userId: string) => Promise<void>;
   currentLeague?: League | null;
   onSaveUserForecast?: (userId: string, matchId: string, homeScore: number, awayScore: number, leagueCode?: string) => Promise<void>;
+  onSyncMatchesFromAPI?: () => Promise<{ success: boolean; message: string; updatedCount: number }>;
 }
 
 export default function AdminPanel({
@@ -121,13 +122,35 @@ export default function AdminPanel({
   onApprovePayment,
   onRejectPayment,
   currentLeague = null,
-  onSaveUserForecast
+  onSaveUserForecast,
+  onSyncMatchesFromAPI
 }: AdminPanelProps) {
   const [editingScores, setEditingScores] = useState<Record<string, { home: number; away: number; status: Match['status']; minute?: number }>>({});
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
   const [syncMessage, setSyncMessage] = useState<string>('');
   const [customFeedUrl, setCustomFeedUrl] = useState<string>('https://worldcupjson.net/matches');
   const [showAdvancedSync, setShowAdvancedSync] = useState<boolean>(false);
+
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  const handleSyncFromAPI = async () => {
+    if (!onSyncMatchesFromAPI) return;
+    setIsSyncing(true);
+    setSyncResult(null);
+    try {
+      const res = await onSyncMatchesFromAPI();
+      if (res.success) {
+        setSyncResult({ type: 'success', message: res.message });
+      } else {
+        setSyncResult({ type: 'error', message: res.message });
+      }
+    } catch (err: any) {
+      setSyncResult({ type: 'error', message: err?.message || String(err) });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   // Estados para la corrección manual de pronósticos de usuario
   const [overrideLeagueCode, setOverrideLeagueCode] = useState<string>(currentLeague?.code || '');
@@ -493,6 +516,21 @@ export default function AdminPanel({
             </button>
           )}
 
+          {onSyncMatchesFromAPI && (
+            <button
+              onClick={handleSyncFromAPI}
+              disabled={isSyncing}
+              className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-50 text-xs font-bold rounded-xl border border-indigo-700 transition-all self-start cursor-pointer shadow-xs"
+            >
+              {isSyncing ? (
+                <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin" />
+              ) : (
+                <RefreshCw className="w-3.5 h-3.5 shrink-0" />
+              )}
+              <span>Sincronizar resultados de API</span>
+            </button>
+          )}
+
           <button
             onClick={async () => {
               try {
@@ -557,6 +595,23 @@ export default function AdminPanel({
           </button>
         </div>
       </div>
+
+      {syncResult && (
+        <div className={`p-4 rounded-2xl border text-xs font-semibold ${
+          syncResult.type === 'success' 
+            ? 'bg-emerald-50 text-emerald-800 border-emerald-200' 
+            : 'bg-rose-50 text-rose-800 border-rose-200'
+        } animate-fadeIn`}>
+          <div className="flex items-center gap-2">
+            {syncResult.type === 'success' ? (
+              <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+            ) : (
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+            )}
+            <span>{syncResult.message}</span>
+          </div>
+        </div>
+      )}
 
       <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3 text-xs text-amber-800 leading-relaxed font-medium">
         <AlertTriangle className="w-5 h-5 shrink-0 text-amber-600" />

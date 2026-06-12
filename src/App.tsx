@@ -5,7 +5,8 @@ import { calculateScore } from './utils/scoring';
 
 import { collection, doc, setDoc, getDoc, getDocs, onSnapshot, serverTimestamp, deleteDoc } from 'firebase/firestore';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { db, auth, handleFirestoreError, OperationType } from './firebase';
+import { db, auth, handleFirestoreError, OperationType, functions } from './firebase';
+import { httpsCallable } from 'firebase/functions';
 
 import { Trophy, Calendar, Settings, Lightbulb, BookOpen, Users, LogOut, Pencil } from 'lucide-react';
 
@@ -851,6 +852,17 @@ export default function App() {
     } catch (err) { handleFirestoreError(err, OperationType.WRITE, `forecasts/${forecastId}`); throw err; }
   };
 
+  const handleSyncMatchesFromAPI = async () => {
+    try {
+      const syncMatchesCallable = httpsCallable<any, { success: boolean; message: string; updatedCount: number }>(functions, 'syncMatches');
+      const result = await syncMatchesCallable();
+      return result.data;
+    } catch (err: any) {
+      console.error("Error invoking syncMatches Cloud Function:", err);
+      throw new Error(err.message || "Error al invocar la función de sincronización.");
+    }
+  };
+
   const handleUpdateMatchResult = async (matchId: string, homeScore: number | undefined, awayScore: number | undefined, status: Match['status'], mode?: Match['mode'], liveStartTimestamp?: number | null, incidents?: Match['incidents']) => {
     try {
       const updateData: any = { homeScore: homeScore !== undefined ? Number(homeScore) : undefined, awayScore: awayScore !== undefined ? Number(awayScore) : undefined, status };
@@ -1446,6 +1458,7 @@ export default function App() {
               onRejectPayment={handleRejectPayment}
               currentLeague={enrichedCurrentLeague}
               onSaveUserForecast={handleSaveUserForecast}
+              onSyncMatchesFromAPI={handleSyncMatchesFromAPI}
             />
           )}
         </div>
