@@ -3,94 +3,7 @@ import { Match, MatchPhase, League, LeagueMemberInfo, UserProfile } from '../typ
 import { Settings, Save, RefreshCw, AlertTriangle, Play, CheckCircle, Globe, Wifi, Check, Sparkles, Loader2, Link2, AlertCircle, Trash2, Edit3, Users } from 'lucide-react';
 import TeamFlag from './TeamFlag';
 
-// Helper de conexión robusta con proxies en cascada y reintentos automáticos
-async function fetchMatchesData(feedUrl: string): Promise<any[]> {
-  const isDefaultFeed = feedUrl.includes('worldcupjson.net/matches');
 
-  const fetchRaw = async (url: string): Promise<any[]> => {
-    const errors: string[] = [];
-
-    // 1. AllOrigins /get wrapper (envuelto, muy compatible)
-    try {
-      const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data.contents) {
-          return JSON.parse(data.contents);
-        }
-      } else {
-        errors.push(`AllOrigins /get (HTTP ${res.status})`);
-      }
-    } catch (e: any) {
-      errors.push(`AllOrigins /get: ${e.message}`);
-    }
-
-    // 2. Corsfix (proxy rápido, directo y con alta disponibilidad)
-    try {
-      const res = await fetch(`https://proxy.corsfix.com/?url=${encodeURIComponent(url)}`);
-      if (res.ok) {
-        return await res.json();
-      } else {
-        errors.push(`Corsfix (HTTP ${res.status})`);
-      }
-    } catch (e: any) {
-      errors.push(`Corsfix: ${e.message}`);
-    }
-
-    // 3. Corsproxy.io (usando formato de parámetro ?url= correcto)
-    try {
-      const res = await fetch(`https://corsproxy.io/?url=${encodeURIComponent(url)}`);
-      if (res.ok) {
-        return await res.json();
-      } else {
-        errors.push(`Corsproxy.io (HTTP ${res.status})`);
-      }
-    } catch (e: any) {
-      errors.push(`Corsproxy.io: ${e.message}`);
-    }
-
-    // 4. Petición directa (por si el feedUrl soporta CORS de forma nativa)
-    try {
-      const res = await fetch(url);
-      if (res.ok) {
-        return await res.json();
-      } else {
-        errors.push(`Direct Fetch (HTTP ${res.status})`);
-      }
-    } catch (e: any) {
-      errors.push(`Direct Fetch: ${e.message}`);
-    }
-
-    throw new Error(`Todos los proxies fallaron. Detalle: [${errors.join(' | ')}]`);
-  };
-
-  if (isDefaultFeed) {
-    // Calcular el minuto en caliente basado en el inicio real a las 19:37:21Z (14:37:21-05:00)
-    // De esta forma al momento actual (15:37:21) dará exactamente 60 minutos y subirá de forma natural.
-    const actualKickoff = new Date('2026-06-11T19:37:21Z').getTime();
-    const currentMinute = Math.max(0, Math.min(120, Math.floor((Date.now() - actualKickoff) / 60000)));
-
-    let apiMatches: any[] = [];
-    try {
-      apiMatches = await fetchRaw(feedUrl);
-    } catch (e) {
-      console.warn("Falla en feed real de respaldo, usando simulación pura", e);
-    }
-
-    // Añadir/Sobrescribir el partido México vs Sudáfrica en vivo con marcador 2-0 y minuto 60
-    const mockLiveMatch = {
-      home_team: { code: 'MEX', country: 'México', goals: 2 },
-      away_team: { code: 'RSA', country: 'Sudáfrica', goals: 0 },
-      status: 'in_progress',
-      minute: currentMinute,
-      datetime: '2026-06-11T19:00:00Z'
-    };
-
-    return [mockLiveMatch, ...apiMatches];
-  }
-
-  return fetchRaw(feedUrl);
-}
 
 interface AdminPanelProps {
   matches: Match[];
@@ -128,8 +41,7 @@ export default function AdminPanel({
   const [editingScores, setEditingScores] = useState<Record<string, { home: number; away: number; status: Match['status']; minute?: number }>>({});
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
   const [syncMessage, setSyncMessage] = useState<string>('');
-  const [customFeedUrl, setCustomFeedUrl] = useState<string>('https://worldcupjson.net/matches');
-  const [showAdvancedSync, setShowAdvancedSync] = useState<boolean>(false);
+
 
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -196,137 +108,15 @@ export default function AdminPanel({
     }
   };
 
-  const handleSyncFromInternet = async (isSimulation: boolean = false) => {
-    setSyncStatus('syncing');
-    setSyncMessage(isSimulation ? 'Obteniendo feed de red simulado...' : 'Conectando con la API de internet...');
 
-    try {
-      let apiMatches: any[] = [];
-
-      if (isSimulation) {
-        // Simular retardo de red
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        // Crear algunos partidos simulados con resultados reales para los dos primeros días del mundial
-        apiMatches = [
-          {
-            home_team: { code: 'MEX', country: 'México', goals: 2 },
-            away_team: { code: 'RSA', country: 'Sudáfrica', goals: 1 },
-            status: 'completed',
-            datetime: '2026-06-11T19:00:00Z'
-          },
-          {
-            home_team: { code: 'KOR', country: 'Corea del Sur', goals: 0 },
-            away_team: { code: 'CZE', country: 'República Checa', goals: 3 },
-            status: 'completed',
-            datetime: '2026-06-12T02:00:00Z'
-          },
-          {
-            home_team: { code: 'CAN', country: 'Canadá', goals: 1 },
-            away_team: { code: 'BIH', country: 'Bosnia y H.', goals: 1 },
-            status: 'in_progress',
-            datetime: '2026-06-12T19:00:00Z'
-          }
-        ];
-      } else {
-        // Consultar usando el helper robusto con proxies redundantes en cascada
-        apiMatches = await fetchMatchesData(customFeedUrl);
-      }
-
-      if (!Array.isArray(apiMatches)) {
-        throw new Error('El formato del JSON recibido no es un array válido de partidos.');
-      }
-
-      let updatedCount = 0;
-
-      for (const apiM of apiMatches) {
-        // Encontrar partido coincidente en local
-        const localMatch = matches.find(m => {
-          const homeCode = apiM.home_team?.code;
-          const awayCode = apiM.away_team?.code;
-          if (!homeCode || !awayCode) return false;
-          
-          return (m.homeTeam.id === homeCode && m.awayTeam.id === awayCode) ||
-                 (m.homeTeam.name.toLowerCase() === apiM.home_team?.country?.toLowerCase() &&
-                  m.awayTeam.name.toLowerCase() === apiM.away_team?.country?.toLowerCase());
-        });
-
-        if (localMatch) {
-          // Si el partido local ya fue marcado como terminado (finished) por el admin,
-          // no permitimos que la sincronización de internet lo revierta.
-          if (localMatch.status === 'finished') {
-            continue;
-          }
-
-          // Mapear estado
-          let mappedStatus: Match['status'] = 'scheduled';
-          if (apiM.status === 'completed' || apiM.status === 'finished') {
-            mappedStatus = 'finished';
-          } else if (apiM.status === 'in_progress' || apiM.status === 'live' || apiM.status === 'active') {
-            mappedStatus = 'live';
-          }
-
-          const apiHomeScore = apiM.home_team?.goals;
-          const apiAwayScore = apiM.away_team?.goals;
-
-          const scoreChanged = localMatch.homeScore !== apiHomeScore || localMatch.awayScore !== apiAwayScore;
-          const statusChanged = localMatch.status !== mappedStatus;
-
-          const currentMinute = localMatch.liveStartTimestamp 
-            ? Math.floor((Date.now() - localMatch.liveStartTimestamp) / 60000) 
-            : null;
-          const minuteChanged = mappedStatus === 'live' && apiM.minute !== undefined && currentMinute !== apiM.minute;
-
-          if (scoreChanged || statusChanged || minuteChanged) {
-            let nextLiveStartTimestamp: number | null | undefined = undefined;
-            if (mappedStatus === 'live') {
-              if (apiM.minute !== undefined) {
-                nextLiveStartTimestamp = Date.now() - (apiM.minute * 60000);
-              } else {
-                nextLiveStartTimestamp = localMatch.liveStartTimestamp || Date.now() - (Math.max(0, Math.floor((Date.now() - new Date(localMatch.dateTime).getTime()) / 60000)) * 60000);
-              }
-            } else {
-              nextLiveStartTimestamp = null;
-            }
-
-            await onUpdateMatchResult(
-              localMatch.id,
-              apiHomeScore !== undefined ? Number(apiHomeScore) : undefined,
-              apiAwayScore !== undefined ? Number(apiAwayScore) : undefined,
-              mappedStatus,
-              undefined,
-              nextLiveStartTimestamp
-            );
-            updatedCount++;
-          }
-        }
-      }
-
-      setSyncStatus('success');
-      setSyncMessage(
-        isSimulation
-          ? `¡Simulación completada! Se actualizaron ${updatedCount} partidos en tiempo real en la base de datos.`
-          : `Sincronización exitosa. Se procesaron ${apiMatches.length} partidos y se actualizaron marcadores de ${updatedCount} partidos en Firestore.`
-      );
-
-      setTimeout(() => {
-        setSyncStatus('idle');
-        setSyncMessage('');
-      }, 6000);
-
-    } catch (err: any) {
-      console.error(err);
-      setSyncStatus('error');
-      setSyncMessage(`Error de red o CORS: ${err.message || 'No se pudo conectar al servidor de destino.'}`);
-    }
-  };
 
   const [editingLeagueCode, setEditingLeagueCode] = useState<string | null>(null);
   const [editingLeagueName, setEditingLeagueName] = useState<string>('');
 
-  const handleSyncLeagues = async (mode: 'internet' | 'manual') => {
+  const handleSyncLeagues = async () => {
     try {
       setSyncStatus('syncing');
-      setSyncMessage(mode === 'internet' ? 'Sincronizando todas las ligas por internet...' : 'Restableciendo ligas por defecto manualmente...');
+      setSyncMessage('Restableciendo ligas por defecto manualmente...');
       
       await new Promise(resolve => setTimeout(resolve, 1200));
 
@@ -337,30 +127,8 @@ export default function AdminPanel({
       const usersSnap = await getDocs(collection(db, 'users'));
       const realUserIds = usersSnap.docs.map(d => d.id);
 
-      let targetLeagues: any[] = [];
-
-      if (mode === 'manual') {
-        const { INITIAL_LEAGUES } = await import('../data');
-        targetLeagues = INITIAL_LEAGUES;
-      } else {
-        // Modo Internet: Intentamos descargar un listado de ligas de un JSON online o de prueba
-        try {
-          const remoteUrl = 'https://raw.githubusercontent.com/SOQI17/elmundialito/main/leagues.json';
-          const proxiedUrl = `https://corsproxy.io/?url=${encodeURIComponent(remoteUrl)}`;
-          const res = await fetch(proxiedUrl);
-          if (!res.ok) throw new Error('Servidor remoto no disponible');
-          targetLeagues = await res.json();
-        } catch (_) {
-          // Fallback a un feed dinámico muy completo
-          targetLeagues = [
-            { code: 'MUNDIAL2026', name: 'Grupo de la Oficina 💼', creatorId: 'U_INTERNET' },
-            { code: 'AMIGOS_FC', name: 'Amigos del Círculo 🔵', creatorId: 'U_INTERNET' },
-            { code: 'PRO-2026', name: 'Liga Pro Ecuador 🇪🇨', creatorId: 'U_INTERNET' },
-            { code: 'GLOBAL-CUP', name: 'Copa Global Mundial 🏆', creatorId: 'U_INTERNET' },
-            { code: 'AMIGOS-EC', name: 'Amigos de Alexis (Ecuador) ⚽', creatorId: 'U_INTERNET' }
-          ];
-        }
-      }
+      const { INITIAL_LEAGUES } = await import('../data');
+      const targetLeagues = INITIAL_LEAGUES;
 
       // Guardar cada liga y asociar los miembros reales registrados
       for (const l of targetLeagues) {
@@ -380,11 +148,7 @@ export default function AdminPanel({
       }
 
       setSyncStatus('success');
-      setSyncMessage(
-        mode === 'internet'
-          ? `¡Ligas de internet sincronizadas con éxito! Se cargaron ${targetLeagues.length} ligas y se agregaron ${realUserIds.length} miembros reales a cada una.`
-          : `¡Ligas restablecidas manualmente con éxito! Se cargaron ${targetLeagues.length} ligas y se agregaron ${realUserIds.length} miembros reales a cada una.`
-      );
+      setSyncMessage(`¡Ligas restablecidas manualmente con éxito! Se cargaron ${targetLeagues.length} ligas y se agregaron ${realUserIds.length} miembros reales a cada una.`);
 
       setTimeout(() => {
         setSyncStatus('idle');
@@ -617,9 +381,10 @@ export default function AdminPanel({
         <AlertTriangle className="w-5 h-5 shrink-0 text-amber-600" />
         <div>
           <strong className="block font-bold text-amber-900 mb-1">Sincronización y Control de Marcadores:</strong>
+          <strong className="block font-bold text-amber-900 mb-1">Control de Marcadores:</strong>
           <ul className="list-disc list-inside space-y-1">
             <li>
-              <strong className="text-slate-800">Sincronización Automática (Internet):</strong> Los resultados en vivo por internet se buscan y <strong>guardan automáticamente</strong> en Firestore en segundo plano cada 2 minutos (sin necesidad de presionar Guardar).
+              <strong className="text-slate-800">Sincronización Automática:</strong> Los resultados reales se buscan y <strong>guardan automáticamente</strong> en Firestore en segundo plano cada 10 minutos (mediante Cloud Function).
             </li>
             <li>
               <strong className="text-slate-800">Edición Manual:</strong> Si deseas forzar o corregir un marcador manualmente, edita los goles o el estado de un partido en la lista inferior y presiona <strong className="text-indigo-900">"Guardar"</strong>.
@@ -628,101 +393,6 @@ export default function AdminPanel({
         </div>
       </div>
 
-      {/* Red/Internet Auto Sync Section */}
-      <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-4" id="admin-internet-sync-card">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
-              <Globe className="w-4 h-4" />
-            </div>
-            <div>
-              <h3 className="font-bold text-slate-800 text-sm flex items-center gap-1.5 font-sans">
-                Sincronización Autónoma de Resultados por Red
-                <span className="px-2 py-0.5 bg-indigo-100 border border-indigo-200 text-indigo-800 text-[8px] font-black uppercase rounded-md tracking-wider">
-                  Internet
-                </span>
-              </h3>
-              <p className="text-[10px] text-slate-505 text-slate-500 font-medium">
-                Conecta la polla con feeds en la red para buscar marcadores reales en internet y actualizar todo automáticamente.
-              </p>
-            </div>
-          </div>
-
-          <div className="flex gap-2 w-full sm:w-auto shrink-0 select-none">
-            <button
-              onClick={() => handleSyncFromInternet(false)}
-              disabled={syncStatus === 'syncing'}
-              className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-xs shrink-0 cursor-pointer disabled:opacity-50"
-            >
-              {syncStatus === 'syncing' && !syncMessage.includes('simulado') ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              ) : (
-                <Wifi className="w-3.5 h-3.5" />
-              )}
-              Sincronizar vía Internet
-            </button>
-          </div>
-        </div>
-
-        {/* Sync status/message box */}
-        {syncStatus !== 'idle' && (
-          <div className={`p-3.5 rounded-xl border flex gap-3 text-xs leading-relaxed transition-all animate-fadeIn ${
-            syncStatus === 'syncing'
-              ? 'bg-slate-100/50 border-slate-200 text-slate-700 font-medium'
-              : syncStatus === 'success'
-                ? 'bg-emerald-50 border-emerald-200 text-emerald-800 font-semibold'
-                : 'bg-rose-50 border-rose-200 text-rose-850 text-rose-800 font-semibold'
-          }`}>
-            {syncStatus === 'syncing' ? (
-              <Loader2 className="w-4 h-4 text-indigo-500 animate-spin shrink-0 mt-0.5" />
-            ) : syncStatus === 'success' ? (
-              <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-            ) : (
-              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-            )}
-            <div>
-              {syncMessage}
-            </div>
-          </div>
-        )}
-
-        {/* Advanced Settings toggle */}
-        <div className="pt-2 border-t border-slate-200/60">
-          <button
-            onClick={() => setShowAdvancedSync(!showAdvancedSync)}
-            className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 cursor-pointer select-none"
-          >
-            <Link2 className="w-3 h-3" />
-            {showAdvancedSync ? 'Ocultar Configuración Avanzada' : 'Mostrar Configuración Avanzada (URL del Feed)'}
-          </button>
-
-          {showAdvancedSync && (
-            <div className="mt-3 space-y-2 max-w-xl animate-fadeIn">
-              <label className="text-[10px] font-bold text-slate-500 uppercase block">
-                URL del Feed JSON de Partidos (API)
-              </label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={customFeedUrl}
-                  onChange={(e) => setCustomFeedUrl(e.target.value)}
-                  placeholder="https://ejemplo.com/partidos.json"
-                  className="bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-700 grow focus:outline-none focus:border-indigo-500 font-medium"
-                />
-                <button
-                  onClick={() => setCustomFeedUrl('https://worldcupjson.net/matches')}
-                  className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 text-xs font-bold rounded-xl border border-slate-200 transition-all cursor-pointer"
-                >
-                  Restablecer
-                </button>
-              </div>
-              <p className="text-[9px] text-slate-400 font-semibold leading-relaxed">
-                El JSON debe tener la estructura estándar de matches de worldcupjson.net, conteniendo un array de objetos con `home_team`, `away_team` y `status`.
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
 
       {/* Open Leagues Admin Section */}
       {leagues && leagues.length > 0 && (
@@ -748,21 +418,12 @@ export default function AdminPanel({
             {/* Sync Leagues Actions */}
             <div className="flex gap-2 w-full sm:w-auto shrink-0 select-none">
               <button
-                onClick={() => handleSyncLeagues('internet')}
+                onClick={() => handleSyncLeagues()}
                 disabled={syncStatus === 'syncing'}
                 className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-xs shrink-0 cursor-pointer disabled:opacity-50"
               >
-                <Globe className="w-3.5 h-3.5" />
-                Sincronizar Ligas Internet
-              </button>
-
-              <button
-                onClick={() => handleSyncLeagues('manual')}
-                disabled={syncStatus === 'syncing'}
-                className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-800 border border-slate-200 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all shrink-0 cursor-pointer disabled:opacity-50"
-              >
                 <RefreshCw className="w-3.5 h-3.5" />
-                Sincronizar Ligas Manual
+                Restablecer Ligas por Defecto
               </button>
             </div>
           </div>

@@ -41,7 +41,7 @@ async function checkIsAdmin(auth, db) {
  * Callable Function: syncMatches
  * Triggers manual synchronization. Accessible only by admins.
  */
-export const syncMatches = onCall({ secrets: [footballDataToken] }, async (request) => {
+export const syncMatches = onCall({ secrets: [footballDataToken], region: "us-central1" }, async (request) => {
   const isAuthorized = await checkIsAdmin(request.auth, db);
   if (!isAuthorized) {
     throw new HttpsError("permission-denied", "Acceso denegado. Solo administradores pueden sincronizar resultados.");
@@ -68,6 +68,7 @@ export const syncMatches = onCall({ secrets: [footballDataToken] }, async (reque
 export const autoSyncMatches = onSchedule({
   schedule: "every 10 minutes",
   secrets: [footballDataToken],
+  region: "us-central1",
   timeZone: "America/Bogota" // Use Colombia/Ecuador timezone matching local user time
 }, async (event) => {
   console.log("Checking if autoSyncMatches execution is required...");

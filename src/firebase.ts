@@ -9,7 +9,7 @@ const app = initializeApp(firebaseConfig);
 // ✅ "(default)" es válido — lo pasamos directamente
 export const db = getFirestore(app);
 export const auth = getAuth(app);
-export const functions = getFunctions(app);
+export const functions = getFunctions(app, "us-central1");
 
 // Test de conexión
 async function testConnection() {
