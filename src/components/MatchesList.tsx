@@ -177,7 +177,6 @@ export default function MatchesList({
       setDrafts(prev => { const copy = { ...prev }; delete copy[matchId]; return copy; });
     } catch (err: any) {
       console.error('Error al guardar pronóstico:', err);
-      alert('⚠️ ERROR AL GUARDAR PRONÓSTICO:\n\n' + (err.message || String(err)) + '\n\nPor favor, verifica si el partido ya comenzó o tu estado de pago.');
     } finally {
       setSavingMatchIds(prev => ({ ...prev, [matchId]: false }));
     }
