@@ -817,7 +817,10 @@ export default function App() {
         updatedAt: serverTimestamp(),
         leagueCode: leagueCode || null
       });
-    } catch (err) { handleFirestoreError(err, OperationType.WRITE, `forecasts/${forecastId}`); }
+    } catch (err) { 
+      handleFirestoreError(err, OperationType.WRITE, `forecasts/${forecastId}`); 
+      throw err;
+    }
   };
 
   const handleSaveUserForecast = async (userId: string, matchId: string, homeScore: number, awayScore: number, leagueCode?: string) => {
