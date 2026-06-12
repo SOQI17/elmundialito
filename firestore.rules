@@ -87,11 +87,11 @@ service cloud.firestore {
                         forecastId == (incoming().matchId + "_" + request.auth.uid) ||
                         (incoming().keys().hasAll(['leagueCode']) && incoming().leagueCode is string && forecastId == (incoming().matchId + "_" + request.auth.uid + "_" + incoming().leagueCode))
                       ) && 
-                      incoming().homeScore is int && 
-                      incoming().awayScore is int &&
+                      incoming().homeScore is number && 
+                      incoming().awayScore is number &&
                       incoming().homeScore >= 0 && incoming().homeScore <= 99 &&
                       incoming().awayScore >= 0 && incoming().awayScore <= 99 &&
-                      incoming().updatedAt == request.time &&
+                      incoming().updatedAt is timestamp &&
                       // Match must exist, be in scheduled status, and kickoff must be in the future
                       exists(/databases/$(database)/documents/matches/$(incoming().matchId)) &&
                       get(/databases/$(database)/documents/matches/$(incoming().matchId)).data.status == "scheduled" &&
@@ -108,11 +108,11 @@ service cloud.firestore {
                         !existing().keys().hasAll(['leagueCode']) || 
                         (incoming().keys().hasAll(['leagueCode']) && incoming().leagueCode == existing().leagueCode)
                       ) &&
-                      incoming().homeScore is int && 
-                      incoming().awayScore is int &&
+                      incoming().homeScore is number && 
+                      incoming().awayScore is number &&
                       incoming().homeScore >= 0 && incoming().homeScore <= 99 &&
                       incoming().awayScore >= 0 && incoming().awayScore <= 99 &&
-                      incoming().updatedAt == request.time &&
+                      incoming().updatedAt is timestamp &&
                       // Match must be in scheduled status, and kickoff must be in the future
                       get(/databases/$(database)/documents/matches/$(existing().matchId)).data.status == "scheduled" &&
                       request.time < timestamp(get(/databases/$(database)/documents/matches/$(existing().matchId)).data.dateTime)
