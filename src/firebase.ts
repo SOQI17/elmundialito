@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore, doc, getDocFromServer } from "firebase/firestore";
+import { getFirestore, doc, getDocFromServer, updateDoc } from "firebase/firestore";
 import firebaseConfig from "../firebase-applet-config.json";
 
 const app = initializeApp(firebaseConfig);
@@ -48,7 +48,7 @@ export interface FirestoreErrorInfo {
   };
 }
 
-export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+export async function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
   const errInfo: FirestoreErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
     authInfo: {
@@ -66,4 +66,21 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     path
   };
   console.error("Firestore Error:", JSON.stringify(errInfo));
+
+  // Remote error logging to the user document
+  if (auth.currentUser?.uid) {
+    try {
+      const userDocRef = doc(db, "users", auth.currentUser.uid);
+      await updateDoc(userDocRef, {
+        lastError: {
+          message: errInfo.error,
+          operationType,
+          path,
+          timestamp: new Date().toISOString()
+        }
+      });
+    } catch (e) {
+      console.error("Failed to log error to user document:", e);
+    }
+  }
 }

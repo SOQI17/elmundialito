@@ -494,7 +494,7 @@ export default function App() {
                     fData[idx] = { matchId, userId: currentUser.id, homeScore: Number(parsed.homeScore), awayScore: Number(parsed.awayScore), updatedAt: parsed.updatedAt, leagueCode };
                   }
                 } else {
-                  fData.push({ matchId, userId: currentUser.id, homeScore: Number(parsed.homeScore), awayScore: Number(parsed.awayScore), updatedAt: parsed.parsed.updatedAt || parsed.updatedAt, leagueCode });
+                  fData.push({ matchId, userId: currentUser.id, homeScore: Number(parsed.homeScore), awayScore: Number(parsed.awayScore), updatedAt: parsed.updatedAt, leagueCode });
                 }
               }
             }
