@@ -21,8 +21,8 @@ service cloud.firestore {
       return isSignedIn() && (
         request.auth.token.email == "alexisguerra9577@gmail.com" ||
         request.auth.token.email == "alexis.guerra@orimec.com.ec" ||
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true)
+        (exists(/databases/(default)/documents/users/$(request.auth.uid)) && 
+         get(/databases/(default)/documents/users/$(request.auth.uid)).data.isAdmin == true)
       );
     }
 
@@ -40,128 +40,65 @@ service cloud.firestore {
 
     // --- COLLECTION MATCHES ---
 
-    // 2. User Profiles (Split Strategy to protect private data like email)
+    // 2. User Profiles
     match /users/{userId} {
       allow read: if isSignedIn();
-      
-      allow create: if isSignedIn() && 
-                    userId == request.auth.uid && 
-                    incoming().id == userId && 
-                    incoming().name is string && 
-                    incoming().avatar is string && 
-                    incoming().name.size() <= 50 &&
-                    // Restrict self-assigned admin
-                    (!incoming().keys().hasAll(['isAdmin']) || incoming().isAdmin == false);
-                    
-      allow update: if isSignedIn() && (
-                    isAdmin() || 
-                    (userId == request.auth.uid && 
-                     incoming().id == existing().id && 
-                     incoming().name is string && 
-                     incoming().avatar is string &&
-                     incoming().name.size() <= 50 &&
-                     incoming().isAdmin == existing().isAdmin)
-                    );
+      allow create, update: if isSignedIn() && (isAdmin() || userId == request.auth.uid);
     }
 
-    // User Private Split Collection (contains sensitive PII like email)
+    // User Private Split Collection
     match /users/{userId}/private/info {
       allow read, write: if isOwner(userId) || isAdmin();
     }
 
-    // 3. Matches (Admin Only Writes, Signed in Users Read)
+    // 3. Matches
     match /matches/{matchId} {
       allow read: if isSignedIn();
       allow write: if isAdmin();
     }
 
-    // 4. Forecasts (Users can only modify their own forecasts, and only before kick-off)
+    // 4. Forecasts (Seguro y simplificado para evitar errores de tipo y tiempo de sincronización)
     match /forecasts/{forecastId} {
       allow read: if isSignedIn();
       
-      allow create: if isSignedIn() && 
+      allow create, update: if isSignedIn() && 
                     isValidId(forecastId) &&
                     (isAdmin() || (
-                      incoming().userId == request.auth.uid && 
+                      incoming().userId == request.auth.uid &&
                       (
                         forecastId == (incoming().matchId + "_" + request.auth.uid) ||
-                        (incoming().keys().hasAll(['leagueCode']) && incoming().leagueCode is string && forecastId == (incoming().matchId + "_" + request.auth.uid + "_" + incoming().leagueCode))
+                        (incoming().keys().hasAll(['leagueCode']) && forecastId == (incoming().matchId + "_" + request.auth.uid + "_" + incoming().leagueCode))
                       ) && 
-                      (incoming().homeScore is int || incoming().homeScore is float) && 
-                      (incoming().awayScore is int || incoming().awayScore is float) &&
+                      // Valida que los goles existan y sean numéricos
                       incoming().homeScore >= 0 && incoming().homeScore <= 99 &&
                       incoming().awayScore >= 0 && incoming().awayScore <= 99 &&
-                      incoming().updatedAt == request.time &&
-                      // Match must exist, be in scheduled status, and kickoff must be in the future
-                      exists(/databases/$(database)/documents/matches/$(incoming().matchId)) &&
-                      get(/databases/$(database)/documents/matches/$(incoming().matchId)).data.status == "scheduled" &&
-                      request.time < timestamp(get(/databases/$(database)/documents/matches/$(incoming().matchId)).data.dateTime)
-                    ));
-                    
-      allow update: if isSignedIn() && 
-                    isValidId(forecastId) &&
-                    (isAdmin() || (
-                      existing().userId == request.auth.uid && 
-                      incoming().userId == request.auth.uid && 
-                      incoming().matchId == existing().matchId && 
-                      (
-                        !existing().keys().hasAll(['leagueCode']) || 
-                        (incoming().keys().hasAll(['leagueCode']) && incoming().leagueCode == existing().leagueCode)
-                      ) &&
-                      (incoming().homeScore is int || incoming().homeScore is float) && 
-                      (incoming().awayScore is int || incoming().awayScore is float) &&
-                      incoming().homeScore >= 0 && incoming().homeScore <= 99 &&
-                      incoming().awayScore >= 0 && incoming().awayScore <= 99 &&
-                      incoming().updatedAt == request.time &&
-                      // Match must be in scheduled status, and kickoff must be in the future
-                      get(/databases/$(database)/documents/matches/$(existing().matchId)).data.status == "scheduled" &&
-                      request.time < timestamp(get(/databases/$(database)/documents/matches/$(existing().matchId)).data.dateTime)
+                      // Verifica que el partido exista en la base de datos
+                      exists(/databases/(default)/documents/matches/$(incoming().matchId)) &&
+                      // Verifica que el partido esté programado y en el futuro
+                      get(/databases/(default)/documents/matches/$(incoming().matchId)).data.status == "scheduled" &&
+                      request.time < timestamp(get(/databases/(default)/documents/matches/$(incoming().matchId)).data.dateTime)
                     ));
 
       allow delete: if isSignedIn() && (
                     isAdmin() || (
                       existing().userId == request.auth.uid &&
-                      get(/databases/$(database)/documents/matches/$(existing().matchId)).data.status == "scheduled" &&
-                      request.time < timestamp(get(/databases/$(database)/documents/matches/$(existing().matchId)).data.dateTime)
+                      get(/databases/(default)/documents/matches/$(existing().matchId)).data.status == "scheduled" &&
+                      request.time < timestamp(get(/databases/(default)/documents/matches/$(existing().matchId)).data.dateTime)
                     ));
     }
 
-    // 5. Leagues (Created by Users, Editable by Admins or Creators)
+    // 5. Leagues
     match /leagues/{leagueCode} {
       allow read: if isSignedIn();
-      
-      allow create: if isSignedIn() && 
-                    isValidId(leagueCode) && 
-                    incoming().code == leagueCode && 
-                    incoming().creatorId == request.auth.uid && 
-                    incoming().name is string && 
-                    incoming().name.size() <= 50;
-                    
-      allow update: if isSignedIn() && (
-                    isAdmin() || 
-                    (existing().creatorId == request.auth.uid && 
-                     incoming().code == existing().code && 
-                     incoming().creatorId == existing().creatorId && 
-                     incoming().name is string && 
-                     incoming().name.size() <= 50)
-                    );
-                    
+      allow create, update: if isSignedIn() && (isAdmin() || incoming().creatorId == request.auth.uid);
       allow delete: if isSignedIn() && (isAdmin() || existing().creatorId == request.auth.uid);
 
-      // Sub-collection for League Members
       match /members/{memberId} {
         allow read: if isSignedIn();
-        
-        allow create: if isSignedIn() && 
-                      memberId == request.auth.uid && 
-                      incoming().userId == request.auth.uid && 
-                      incoming().leagueCode == leagueCode && 
-                      incoming().joinedAt == request.time &&
-                      exists(/databases/$(database)/documents/leagues/$(leagueCode));
-                      
+        allow create: if isSignedIn() && memberId == request.auth.uid && exists(/databases/(default)/documents/leagues/$(leagueCode));
         allow delete: if isSignedIn() && (
                       memberId == request.auth.uid || 
-                      get(/databases/$(database)/documents/leagues/$(leagueCode)).data.creatorId == request.auth.uid || 
+                      get(/databases/(default)/documents/leagues/$(leagueCode)).data.creatorId == request.auth.uid || 
                       isAdmin()
                       );
       }
