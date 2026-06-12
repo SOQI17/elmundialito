@@ -85,7 +85,7 @@ service cloud.firestore {
                       incoming().userId == request.auth.uid && 
                       (
                         forecastId == (incoming().matchId + "_" + request.auth.uid) ||
-                        (incoming().keys().hasAll(['leagueCode']) && forecastId == (incoming().matchId + "_" + request.auth.uid + "_" + incoming().leagueCode))
+                        (incoming().keys().hasAll(['leagueCode']) && incoming().leagueCode is string && forecastId == (incoming().matchId + "_" + request.auth.uid + "_" + incoming().leagueCode))
                       ) && 
                       incoming().homeScore is int && 
                       incoming().awayScore is int &&
