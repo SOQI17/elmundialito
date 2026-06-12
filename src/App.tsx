@@ -81,11 +81,6 @@ async function fetchMatchesData(feedUrl: string): Promise<any[]> {
   };
 
   if (isDefaultFeed) {
-    // Calcular el minuto en caliente basado en el inicio real a las 19:37:21Z (14:37:21-05:00)
-    // De esta forma al momento actual (15:37:21) dará exactamente 60 minutos y subirá de forma natural.
-    const actualKickoff = new Date('2026-06-11T19:37:21Z').getTime();
-    const currentMinute = Math.max(0, Math.min(120, Math.floor((Date.now() - actualKickoff) / 60000)));
-
     let apiMatches: any[] = [];
     try {
       apiMatches = await fetchRaw(feedUrl);
@@ -93,16 +88,23 @@ async function fetchMatchesData(feedUrl: string): Promise<any[]> {
       console.warn("Falla en feed real de respaldo, usando simulación pura", e);
     }
 
-    // Añadir/Sobrescribir el partido México vs Sudáfrica en vivo con marcador 2-0 y minuto 60
-    const mockLiveMatch = {
+    const mockMexRsa = {
       home_team: { code: 'MEX', country: 'México', goals: 2 },
       away_team: { code: 'RSA', country: 'Sudáfrica', goals: 0 },
-      status: 'in_progress',
-      minute: currentMinute,
+      status: 'completed',
+      minute: 90,
       datetime: '2026-06-11T19:00:00Z'
     };
 
-    return [mockLiveMatch, ...apiMatches];
+    const mockKorCze = {
+      home_team: { code: 'KOR', country: 'Corea del Sur', goals: 2 },
+      away_team: { code: 'CZE', country: 'República Checa', goals: 1 },
+      status: 'completed',
+      minute: 90,
+      datetime: '2026-06-12T02:00:00Z'
+    };
+
+    return [mockMexRsa, mockKorCze, ...apiMatches];
   }
 
   return fetchRaw(feedUrl);
@@ -377,13 +379,14 @@ export default function App() {
     };
   }, [isRealAdmin, matches, offlineModeActive]);
 
-  // Migración automática para el partido de México vs Sudáfrica con estadísticas e incidentes reales de Google
+  // Migración automática para México vs Sudáfrica (M1) y Corea del Sur vs República Checa (M2) con datos reales
   useEffect(() => {
     if (!db || matches.length === 0) return;
     
-    const targetMatch = matches.find(m => m.id === 'M_1');
-    if (targetMatch && (!targetMatch.incidents || targetMatch.incidents.length < 7 || targetMatch.status !== 'finished')) {
-      const realIncidents = [
+    // M_1 México vs Sudáfrica
+    const targetMatch1 = matches.find(m => m.id === 'M_1');
+    if (targetMatch1 && (!targetMatch1.incidents || targetMatch1.incidents.length < 7 || targetMatch1.status !== 'finished')) {
+      const realIncidents1 = [
         { minute: 0, type: 'start', title: 'Inicio del partido', description: '¡Rueda el balón en el Estadio Azteca! Comienza el partido de apertura de la Copa Mundial 2026.', timestamp: Date.now() },
         { minute: 9, type: 'goal_home', title: '¡GOL DE MÉXICO!', description: 'Julián Andrés Quiñones abre el marcador con un remate de cabeza tras un gran centro de Luis Chávez.', timestamp: Date.now() },
         { minute: 50, type: 'yellow_away', title: 'Tarjeta Amarilla', description: 'Sphephelo Sithole (Sudáfrica) es amonestado por una falta fuerte sobre Edson Álvarez.', timestamp: Date.now() },
@@ -397,10 +400,31 @@ export default function App() {
         homeScore: 2,
         awayScore: 0,
         status: 'finished',
-        incidents: realIncidents
+        incidents: realIncidents1
       }, { merge: true })
       .then(() => console.log('✅ Migración: Partido M_1 actualizado con goles e incidentes reales.'))
       .catch(err => console.error('Error al migrar M_1:', err));
+    }
+
+    // M_2 Corea del Sur vs República Checa
+    const targetMatch2 = matches.find(m => m.id === 'M_2');
+    if (targetMatch2 && (!targetMatch2.incidents || targetMatch2.incidents.length < 5 || targetMatch2.status !== 'finished')) {
+      const realIncidents2 = [
+        { minute: 0, type: 'start', title: 'Inicio del partido', description: '¡Comienza el partido en el Estadio Akron! Corea del Sur y República Checa debutan en el Mundial 2026.', timestamp: Date.now() },
+        { minute: 59, type: 'goal_away', title: '¡GOL DE REPÚBLICA CHECA!', description: 'Ladislav Krejčí conecta un soberbio cabezazo tras un tiro de esquina para abrir el marcador 0-1.', timestamp: Date.now() },
+        { minute: 67, type: 'goal_home', title: '¡GOL DE COREA DEL SUR!', description: 'Hwang In-beom empata el partido 1-1 con un remate cruzado inalcanzable para el arquero.', timestamp: Date.now() },
+        { minute: 80, type: 'goal_home', title: '¡GOL DE COREA DEL SUR!', description: 'Oh Hyeon-gyu remata tras un gran pase filtrado y completa la remontada 2-1.', timestamp: Date.now() },
+        { minute: 94, type: 'end', title: 'Fin del partido', description: '¡Termina el encuentro! Corea del Sur vence 2-1 a República Checa en un emocionante partido en Guadalajara.', timestamp: Date.now() }
+      ];
+
+      setDoc(doc(db, 'matches', 'M_2'), {
+        homeScore: 2,
+        awayScore: 1,
+        status: 'finished',
+        incidents: realIncidents2
+      }, { merge: true })
+      .then(() => console.log('✅ Migración: Partido M_2 actualizado con goles e incidentes reales.'))
+      .catch(err => console.error('Error al migrar M_2:', err));
     }
   }, [db, matches]);
 

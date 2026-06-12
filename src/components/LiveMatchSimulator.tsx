@@ -98,6 +98,16 @@ export default function LiveMatchSimulator({
         cornersHome: 7,
         cornersAway: 2
       });
+    } else if (match.id === 'M_2' && match.status === 'finished') {
+      setStats({
+        possessionHome: 62,
+        shotsHome: 15,
+        shotsAway: 8,
+        foulsHome: 8,
+        foulsAway: 13,
+        cornersHome: 4,
+        cornersAway: 5
+      });
     } else {
       // Fallbacks si no hay suficientes incidentes
       setStats({
@@ -767,34 +777,7 @@ export default function LiveMatchSimulator({
           {/* STADIUM GRAPHIC AND STATS */}
           <div className="w-full md:w-3/5 flex flex-col p-5 space-y-6 h-full overflow-y-auto min-h-[300px]" id="pitch-stats-view">
             
-            {/* MINI STADIUM PITCH PREVIEW */}
-            <div className="bg-gradient-to-b from-emerald-800 to-emerald-950 h-36 rounded-2xl relative border border-slate-800 shadow-inner flex items-center justify-center overflow-hidden shrink-0">
-              <div className="absolute inset-0 opacity-15 bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:16px_16px]"></div>
-              
-              <div className="absolute inset-y-0 left-1/2 w-0.5 bg-white/30"></div>
-              <div className="absolute inset-y-8 left-1/2 -translate-x-1/2 w-20 h-20 rounded-full border border-white/20"></div>
-              <div className="absolute left-0 top-1/4 bottom-1/4 w-5 border-y border-r border-white/20"></div>
-              <div className="absolute right-0 top-1/4 bottom-1/4 w-5 border-y border-l border-white/20"></div>
 
-              {/* Animated ball on pitch */}
-              <div className={`absolute transition-all duration-1000 bg-white text-slate-900 font-black rounded-full text-sm w-8 h-8 flex items-center justify-center shadow-lg ${
-                isPlaying || (currentMode === 'realtime' && match.status === 'live') ? 'animate-bounce' : ''
-              }`} style={{
-                left: `${40 + (stats.possessionHome - 50) * 0.4}%`,
-                top: `${40 + (Math.sin(gameMinute) * 15)}%`
-              }}>
-                ⚽
-              </div>
-
-              <div className="absolute bottom-3 left-4 flex items-center gap-1 text-[9px] font-bold text-emerald-100 bg-emerald-950/70 border border-emerald-800/40 px-2 py-0.5 rounded-md backdrop-blur-xs">
-                <Shield className="w-3 h-3 text-white" />
-                <span>Estadio Copa Mundial 2026</span>
-              </div>
-
-              <div className="absolute top-2.5 right-3.5 bg-indigo-950/80 border border-indigo-500/30 text-indigo-300 font-mono text-[8px] px-2 py-0.5 rounded-md tracking-wider">
-                {match.status === 'live' ? '⚡ TRANSMISIÓN EN VIVO' : '⏸️ RETRANSMISIÓN'}
-              </div>
-            </div>
 
             {/* REAL-TIME MATCH STATISTICS */}
             <div className="bg-slate-950/40 border border-slate-800 rounded-2xl p-4 space-y-4 shrink-0 shadow-inner" id="live-match-stats-panel">

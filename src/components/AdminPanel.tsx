@@ -498,7 +498,9 @@ export default function AdminPanel({
               try {
                 const { db } = await import('../firebase');
                 const { doc, setDoc } = await import('firebase/firestore');
-                const realIncidents = [
+                
+                // M_1 México vs Sudáfrica
+                const realIncidents1 = [
                   { minute: 0, type: 'start', title: 'Inicio del partido', description: '¡Rueda el balón en el Estadio Azteca! Comienza el partido de apertura de la Copa Mundial 2026.', timestamp: Date.now() },
                   { minute: 9, type: 'goal_home', title: '¡GOL DE MÉXICO!', description: 'Julián Andrés Quiñones abre el marcador con un remate de cabeza tras un gran centro de Luis Chávez.', timestamp: Date.now() },
                   { minute: 50, type: 'yellow_away', title: 'Tarjeta Amarilla', description: 'Sphephelo Sithole (Sudáfrica) es amonestado por una falta fuerte sobre Edson Álvarez.', timestamp: Date.now() },
@@ -511,9 +513,25 @@ export default function AdminPanel({
                   homeScore: 2,
                   awayScore: 0,
                   status: 'finished',
-                  incidents: realIncidents
+                  incidents: realIncidents1
                 }, { merge: true });
-                alert('✅ ¡Estadísticas y cronología real del México vs Sudáfrica cargadas con éxito en Firestore!');
+
+                // M_2 Corea del Sur vs República Checa
+                const realIncidents2 = [
+                  { minute: 0, type: 'start', title: 'Inicio del partido', description: '¡Comienza el partido en el Estadio Akron! Corea del Sur y República Checa debutan en el Mundial 2026.', timestamp: Date.now() },
+                  { minute: 59, type: 'goal_away', title: '¡GOL DE REPÚBLICA CHECA!', description: 'Ladislav Krejčí conecta un soberbio cabezazo tras un tiro de esquina para abrir el marcador 0-1.', timestamp: Date.now() },
+                  { minute: 67, type: 'goal_home', title: '¡GOL DE COREA DEL SUR!', description: 'Hwang In-beom empata el partido 1-1 con un remate cruzado inalcanzable para el arquero.', timestamp: Date.now() },
+                  { minute: 80, type: 'goal_home', title: '¡GOL DE COREA DEL SUR!', description: 'Oh Hyeon-gyu remata tras un gran pase filtrado y completa la remontada 2-1.', timestamp: Date.now() },
+                  { minute: 94, type: 'end', title: 'Fin del partido', description: '¡Termina el encuentro! Corea del Sur vence 2-1 a República Checa en un emocionante partido en Guadalajara.', timestamp: Date.now() }
+                ];
+                await setDoc(doc(db, 'matches', 'M_2'), {
+                  homeScore: 2,
+                  awayScore: 1,
+                  status: 'finished',
+                  incidents: realIncidents2
+                }, { merge: true });
+
+                alert('✅ ¡Estadísticas y cronologías reales (México 2-0 y Corea del Sur 2-1) cargadas con éxito en Firestore!');
               } catch (err: any) {
                 console.error(err);
                 alert('❌ Error al actualizar: ' + (err.message || String(err)));
@@ -521,7 +539,7 @@ export default function AdminPanel({
             }}
             className="flex items-center gap-1.5 px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold rounded-xl border border-emerald-300 transition-all self-start cursor-pointer shadow-xs"
           >
-            ⚽ Cargar Estadísticas Reales (México 2-0)
+            ⚽ Cargar Estadísticas Reales (M1 y M2)
           </button>
 
           <button
