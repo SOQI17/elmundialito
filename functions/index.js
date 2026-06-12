@@ -66,7 +66,7 @@ export const syncMatches = onCall({ secrets: [footballDataToken], region: "us-ce
  * Automatically synchronizes matches every 10 minutes, optimizing API calls.
  */
 export const autoSyncMatches = onSchedule({
-  schedule: "every 10 minutes",
+  schedule: "every 3 minutes",
   secrets: [footballDataToken],
   region: "us-central1",
   timeZone: "America/Bogota" // Use Colombia/Ecuador timezone matching local user time
