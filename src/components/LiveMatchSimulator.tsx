@@ -946,16 +946,7 @@ export default function LiveMatchSimulator({
             )}
 
 
-            {/* INFORMATIVE CALLOUT */}
-            <div className="bg-indigo-950/20 border border-indigo-900/30 text-indigo-200/90 p-4 rounded-xl flex items-start gap-2.5 text-[11px] leading-relaxed select-none">
-              <AlertCircle className="w-4 h-4 shrink-0 text-indigo-400 mt-0.5" />
-              <div>
-                <p className="font-extrabold text-indigo-300 uppercase tracking-wide text-[9px]">💡 ¿Sincronización Total?</p>
-                <p className="text-slate-400 mt-0.5">
-                  Los marcadores de los partidos en juego de la quiniela recalculan en tiempo real la tabla general de posiciones de todos los usuarios. ¡Las pollas se disfrutan en el minuto a minuto de la Eurocopa/Mundial!
-                </p>
-              </div>
-            </div>
+
           </div>
 
           {/* CHRONOLOGICAL INCIDENTS LIST TIMELINE */}
