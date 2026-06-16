@@ -111,6 +111,14 @@ export default function MatchesList({
     return `${year}-${month}-${day}`;
   };
 
+  const isDateInPast = (dateStr: string) => {
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const todayStr = `${year}-${month}-${day}`;
+    return dateStr < todayStr;
+  };
+
   const formatMatchTime = (dateStr: string) => {
     const d = new Date(dateStr);
     const timeStr = d.toLocaleTimeString('es-ES', {
@@ -145,6 +153,30 @@ export default function MatchesList({
   const availableDatesInPhase = Array.from(
     new Set(matches.filter(m => m.phase === activePhase).map(m => getLocalDateStr(m.dateTime)))
   ).sort();
+
+  const availableDatesKey = availableDatesInPhase.join(',');
+
+  useEffect(() => {
+    if (availableDatesInPhase.length > 0) {
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      const todayStr = `${year}-${month}-${day}`;
+
+      if (availableDatesInPhase.includes(todayStr)) {
+        setActiveDateFilter(todayStr);
+      } else {
+        const upcomingDate = availableDatesInPhase.find(dateStr => dateStr > todayStr);
+        if (upcomingDate) {
+          setActiveDateFilter(upcomingDate);
+        } else {
+          setActiveDateFilter(availableDatesInPhase[availableDatesInPhase.length - 1]);
+        }
+      }
+    } else {
+      setActiveDateFilter('all');
+    }
+  }, [activePhase, availableDatesKey]);
 
   const getDateStats = (dateStr: string) => {
     const dayMatches = matches.filter(m => m.phase === activePhase && getLocalDateStr(m.dateTime) === dateStr);
@@ -448,17 +480,30 @@ export default function MatchesList({
                 const isSelected = activeDateFilter === dateStr;
                 const { totalCount, predictedCount } = getDateStats(dateStr);
                 const allDone = !currentUser.isAdmin && (predictedCount >= totalCount);
+                const isPast = isDateInPast(dateStr);
                 return (
                   <button
                     key={dateStr}
                     onClick={() => setActiveDateFilter(dateStr)}
                     className={`px-3 py-1.5 text-xs font-bold rounded-full whitespace-nowrap transition-all border shrink-0 flex items-center gap-1.5 ${
-                      isSelected ? 'bg-amber-500 border-amber-500 text-white shadow-sm' : 'bg-slate-50 border-slate-200/60 text-slate-600 hover:text-indigo-950 hover:bg-slate-100'
+                      isSelected 
+                        ? isPast
+                          ? 'bg-rose-600 border-rose-600 text-white shadow-sm hover:bg-rose-700'
+                          : 'bg-amber-500 border-amber-500 text-white shadow-sm' 
+                        : isPast
+                          ? 'bg-rose-50/70 border-rose-200 text-rose-700 hover:text-rose-950 hover:bg-rose-100/80'
+                          : 'bg-slate-50 border-slate-200/60 text-slate-600 hover:text-indigo-950 hover:bg-slate-100'
                     }`}
                   >
                     <span>{getDayShortLabel(dateStr)}</span>
                     <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold font-mono ${
-                      isSelected ? 'bg-white/20 text-white' : allDone ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700'
+                      isSelected 
+                        ? 'bg-white/20 text-white' 
+                        : allDone 
+                          ? 'bg-emerald-100 text-emerald-800' 
+                          : isPast
+                            ? 'bg-rose-100 text-rose-800'
+                            : 'bg-slate-200 text-slate-700'
                     }`}>
                       {currentUser.isAdmin ? `${totalCount} part.` : `${predictedCount}/${totalCount}`}
                     </span>
@@ -486,15 +531,26 @@ export default function MatchesList({
             return Object.keys(matchesByDate).sort().map((dateKey) => {
               const dateMatches = matchesByDate[dateKey];
               const isTodaySimulation = dateKey === '2026-06-11';
+              const isPastDate = isDateInPast(dateKey);
 
               return (
                 <div key={dateKey} className="space-y-4">
-                  <div className="flex items-center gap-2.5 px-3 py-2 bg-slate-50 rounded-xl border border-slate-200/40">
-                    <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 animate-pulse shadow-sm"></span>
-                    <h3 className="text-xs font-black text-slate-700 tracking-tight uppercase">
+                  <div className={`flex items-center gap-2.5 px-3 py-2 rounded-xl border ${
+                    isPastDate
+                      ? 'bg-rose-50/40 border-rose-200/30'
+                      : 'bg-slate-50 border-slate-200/40'
+                  }`}>
+                    <span className={`w-2.5 h-2.5 rounded-full shadow-sm ${
+                      isPastDate ? 'bg-rose-400' : 'bg-indigo-500 animate-pulse'
+                    }`}></span>
+                    <h3 className={`text-xs font-black tracking-tight uppercase ${
+                      isPastDate ? 'text-rose-700' : 'text-slate-700'
+                    }`}>
                       📅 {formatDateHeader(dateKey)}
                     </h3>
-                    <span className="text-[10px] bg-slate-200 text-slate-600 font-bold px-2 py-0.5 rounded-full font-mono">
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full font-mono ${
+                      isPastDate ? 'bg-rose-100 text-rose-800' : 'bg-slate-200 text-slate-600'
+                    }`}>
                       {dateMatches.length} {dateMatches.length === 1 ? 'partido' : 'partidos'}
                     </span>
                     {isTodaySimulation && (

@@ -64,6 +64,49 @@ export default function App() {
   const [currentLeagueMembersData, setCurrentLeagueMembersData] = useState<LeagueMemberInfo[]>([]);
   const [pendingPayments, setPendingPayments] = useState<LeagueMemberInfo[]>([]);
   const [activePhase, setActivePhase] = useState<MatchPhase>('group');
+  const [hasInitializedPhase, setHasInitializedPhase] = useState(false);
+
+  // Automatically select the active phase based on current/upcoming matches when matches are loaded
+  useEffect(() => {
+    if (matches.length > 0 && !hasInitializedPhase) {
+      const d = new Date();
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      const todayStr = `${year}-${month}-${day}`;
+
+      const getLocalDateStr = (dateStr: string) => {
+        const date = new Date(dateStr);
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const dayVal = String(date.getDate()).padStart(2, '0');
+        return `${y}-${m}-${dayVal}`;
+      };
+
+      // 1. Check if there are matches today
+      const todayMatch = matches.find(m => getLocalDateStr(m.dateTime) === todayStr);
+      if (todayMatch) {
+        setActivePhase(todayMatch.phase);
+        setHasInitializedPhase(true);
+        return;
+      }
+
+      // 2. Check if there are upcoming matches
+      const upcomingMatch = matches.find(m => getLocalDateStr(m.dateTime) > todayStr);
+      if (upcomingMatch) {
+        setActivePhase(upcomingMatch.phase);
+        setHasInitializedPhase(true);
+        return;
+      }
+
+      // 3. Otherwise, select the last match's phase
+      const lastMatch = matches[matches.length - 1];
+      if (lastMatch) {
+        setActivePhase(lastMatch.phase);
+        setHasInitializedPhase(true);
+      }
+    }
+  }, [matches, hasInitializedPhase]);
 
   const isRealAdmin = !!(currentUser?.isAdmin || isAdminEmail(authUser?.email));
   const currentUserWithAdminFlag = currentUser ? { ...currentUser, isAdmin: isRealAdmin } : null;
