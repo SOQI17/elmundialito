@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { INITIAL_MATCHES, INITIAL_LEAGUES } from './data';
-import { Match, Forecast, UserProfile, League, UserStats, LeagueMemberInfo, MatchPhase } from './types';
+import { Match, Forecast, UserProfile, League, UserStats, LeagueMemberInfo, MatchPhase, Team } from './types';
 import { calculateScore } from './utils/scoring';
 
 import { collection, doc, setDoc, getDoc, getDocs, onSnapshot, serverTimestamp, deleteDoc } from 'firebase/firestore';
@@ -729,12 +729,28 @@ export default function App() {
     }
   };
 
-  const handleUpdateMatchResult = async (matchId: string, homeScore: number | undefined, awayScore: number | undefined, status: Match['status'], mode?: Match['mode'], liveStartTimestamp?: number | null, incidents?: Match['incidents']) => {
+  const handleUpdateMatchResult = async (
+    matchId: string, 
+    homeScore: number | undefined, 
+    awayScore: number | undefined, 
+    status: Match['status'], 
+    mode?: Match['mode'], 
+    liveStartTimestamp?: number | null, 
+    incidents?: Match['incidents'],
+    homeTeam?: Team,
+    awayTeam?: Team
+  ) => {
     try {
-      const updateData: any = { homeScore: homeScore !== undefined ? Number(homeScore) : undefined, awayScore: awayScore !== undefined ? Number(awayScore) : undefined, status };
+      const updateData: any = { 
+        homeScore: homeScore !== undefined ? Number(homeScore) : undefined, 
+        awayScore: awayScore !== undefined ? Number(awayScore) : undefined, 
+        status 
+      };
       if (mode !== undefined) updateData.mode = mode;
       if (liveStartTimestamp !== undefined) updateData.liveStartTimestamp = liveStartTimestamp;
       if (incidents !== undefined) updateData.incidents = incidents;
+      if (homeTeam !== undefined) updateData.homeTeam = homeTeam;
+      if (awayTeam !== undefined) updateData.awayTeam = awayTeam;
       await setDoc(doc(db, 'matches', matchId), updateData, { merge: true });
     } catch (err) { 
       handleFirestoreError(err, OperationType.WRITE, `matches/${matchId}`); 
