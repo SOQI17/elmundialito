@@ -1,8 +1,17 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Match, MatchPhase, League, LeagueMemberInfo, UserProfile, Team } from '../types';
 import { Settings, Save, RefreshCw, AlertTriangle, Play, CheckCircle, Globe, Wifi, Check, Sparkles, Loader2, Link2, AlertCircle, Trash2, Edit3, Users } from 'lucide-react';
 import TeamFlag from './TeamFlag';
 import { TEAMS } from '../data';
+
+const PHASES_LABELS: Record<MatchPhase, string> = {
+  group: 'Fase de Grupos',
+  dieciseisavos: 'Dieciseisavos de Final',
+  octavos: 'Octavos de Final',
+  cuartos: 'Cuartos de Final',
+  semifinal: 'Semifinal',
+  final: 'Final de la Copa'
+};
 
 
 
@@ -51,6 +60,84 @@ export default function AdminPanel({
 }: AdminPanelProps) {
   const [editingScores, setEditingScores] = useState<Record<string, { home: number; away: number; status: Match['status']; minute?: number }>>({});
   const [editingTeams, setEditingTeams] = useState<Record<string, { homeId?: string; awayId?: string }>>({});
+  const [activePhaseFilter, setActivePhaseFilter] = useState<MatchPhase>('group');
+  const [activeDateFilter, setActiveDateFilter] = useState<string>('all');
+
+  const getLocalDateStr = (dateStr: string) => {
+    const d = new Date(dateStr);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const availableDatesInPhase = useMemo(() => {
+    return Array.from(
+      new Set(
+        matches
+          .filter(m => m.phase === activePhaseFilter)
+          .map(m => getLocalDateStr(m.dateTime))
+      )
+    ).sort();
+  }, [matches, activePhaseFilter]);
+
+  const availableDatesKey = availableDatesInPhase.join(',');
+
+  // Automatically select the correct initial phase on load
+  const [hasInitializedPhase, setHasInitializedPhase] = useState(false);
+  useEffect(() => {
+    if (matches.length > 0 && !hasInitializedPhase) {
+      const d = new Date();
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      const todayStr = `${year}-${month}-${day}`;
+
+      const todayMatch = matches.find(m => getLocalDateStr(m.dateTime) === todayStr);
+      if (todayMatch) {
+        setActivePhaseFilter(todayMatch.phase);
+        setHasInitializedPhase(true);
+        return;
+      }
+
+      const upcomingMatch = matches.find(m => getLocalDateStr(m.dateTime) > todayStr);
+      if (upcomingMatch) {
+        setActivePhaseFilter(upcomingMatch.phase);
+        setHasInitializedPhase(true);
+        return;
+      }
+
+      const lastMatch = matches[matches.length - 1];
+      if (lastMatch) {
+        setActivePhaseFilter(lastMatch.phase);
+        setHasInitializedPhase(true);
+      }
+    }
+  }, [matches, hasInitializedPhase]);
+
+  // Automatically select the correct initial date filter when phase or dates change
+  useEffect(() => {
+    if (availableDatesInPhase.length > 0) {
+      const d = new Date();
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      const todayStr = `${year}-${month}-${day}`;
+
+      if (availableDatesInPhase.includes(todayStr)) {
+        setActiveDateFilter(todayStr);
+      } else {
+        const upcomingDate = availableDatesInPhase.find(dateStr => dateStr > todayStr);
+        if (upcomingDate) {
+          setActiveDateFilter(upcomingDate);
+        } else {
+          setActiveDateFilter(availableDatesInPhase[availableDatesInPhase.length - 1]);
+        }
+      }
+    } else {
+      setActiveDateFilter('all');
+    }
+  }, [activePhaseFilter, availableDatesKey]);
 
   const SELECTABLE_TEAMS = useMemo(() => {
     return Object.values(TEAMS).sort((a, b) => {
@@ -93,6 +180,47 @@ export default function AdminPanel({
   const [overrideHomeScore, setOverrideHomeScore] = useState<number | string>('');
   const [overrideAwayScore, setOverrideAwayScore] = useState<number | string>('');
   const [isSavingOverride, setIsSavingOverride] = useState<boolean>(false);
+  const [overridePhase, setOverridePhase] = useState<MatchPhase | 'all'>('all');
+  const [overrideDate, setOverrideDate] = useState<string>('all');
+
+  // Synchronize overridePhase with activePhaseFilter on first initialization
+  useEffect(() => {
+    if (activePhaseFilter && overridePhase === 'all') {
+      setOverridePhase(activePhaseFilter);
+    }
+  }, [activePhaseFilter]);
+
+  // Compute available dates for the selected overridePhase
+  const overrideAvailableDates = useMemo(() => {
+    const filtered = overridePhase === 'all'
+      ? matches
+      : matches.filter(m => m.phase === overridePhase);
+    return Array.from(
+      new Set(
+        filtered.map(m => getLocalDateStr(m.dateTime))
+      )
+    ).sort();
+  }, [matches, overridePhase]);
+
+  // Reset overrideDate and overrideMatchId when overridePhase changes
+  useEffect(() => {
+    setOverrideDate('all');
+    setOverrideMatchId('');
+  }, [overridePhase]);
+
+  // Reset overrideMatchId when overrideDate changes
+  useEffect(() => {
+    setOverrideMatchId('');
+  }, [overrideDate]);
+
+  // Compute filtered matches for manual forecast registration
+  const filteredMatchesForOverride = useMemo(() => {
+    return matches.filter(m => {
+      if (overridePhase !== 'all' && m.phase !== overridePhase) return false;
+      if (overrideDate !== 'all' && getLocalDateStr(m.dateTime) !== overrideDate) return false;
+      return true;
+    });
+  }, [matches, overridePhase, overrideDate]);
 
   // Obtener los usuarios filtrados según la liga seleccionada
   const filteredUsersForOverride = React.useMemo(() => {
@@ -607,7 +735,7 @@ export default function AdminPanel({
                           await onApprovePayment(currentLeague.code, payment.userId, payment.paymentVoucherAmount || 0);
                         }
                       }}
-                      className="flex-1 py-2 bg-emerald-650 bg-emerald-650 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1 transition-all cursor-pointer shadow-xs"
+                      className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1 transition-all cursor-pointer shadow-xs"
                     >
                       <Check className="w-3.5 h-3.5" />
                       Aprobar y Acreditar Saldo
@@ -652,258 +780,413 @@ export default function AdminPanel({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
-            {/* League Dropdown */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-bold text-slate-600">Seleccionar Liga</label>
-              <select
-                value={overrideLeagueCode}
-                onChange={(e) => {
-                  setOverrideLeagueCode(e.target.value);
-                  setOverrideUserId('');
-                }}
-                className="bg-white border border-slate-200 rounded-lg p-2 text-xs font-medium text-slate-800 focus:outline-none focus:border-indigo-500 cursor-pointer"
-              >
-                <option value="">Global (Sin Liga)</option>
-                {leagues.map(l => (
-                  <option key={l.code} value={l.code}>{l.name}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* User Dropdown */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-bold text-slate-600">Seleccionar Usuario</label>
-              <select
-                value={overrideUserId}
-                onChange={(e) => setOverrideUserId(e.target.value)}
-                className="bg-white border border-slate-200 rounded-lg p-2 text-xs font-medium text-slate-800 focus:outline-none focus:border-indigo-500 cursor-pointer"
-              >
-                <option value="">-- Seleccionar --</option>
-                {filteredUsersForOverride.map(user => (
-                  <option key={user.id} value={user.id}>{user.avatar} {user.name}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Match Dropdown */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-bold text-slate-600">Seleccionar Partido</label>
-              <select
-                value={overrideMatchId}
-                onChange={(e) => setOverrideMatchId(e.target.value)}
-                className="bg-white border border-slate-200 rounded-lg p-2 text-xs font-medium text-slate-800 focus:outline-none focus:border-indigo-500 cursor-pointer"
-              >
-                <option value="">-- Seleccionar --</option>
-                {matches.map(match => (
-                  <option key={match.id} value={match.id}>
-                    {match.homeTeam.flag} {match.homeTeam.name} vs {match.awayTeam.name} {match.awayTeam.flag}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Scores input */}
-            <div className="flex items-center gap-3">
-              <div className="flex flex-col gap-1.5 w-20">
-                <label className="text-xs font-bold text-slate-600 text-center">Goles Local</label>
-                <input
-                  type="number"
-                  min="0"
-                  value={overrideHomeScore}
-                  onChange={(e) => setOverrideHomeScore(e.target.value)}
-                  className="bg-white border border-slate-200 rounded-lg p-2 text-center font-mono font-bold text-slate-800 focus:outline-none focus:border-indigo-500"
-                />
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-bold text-slate-600">1. Seleccionar Liga</label>
+                <select
+                  value={overrideLeagueCode}
+                  onChange={(e) => {
+                    setOverrideLeagueCode(e.target.value);
+                    setOverrideUserId('');
+                  }}
+                  className="bg-white border border-slate-200 rounded-lg p-2 text-xs font-medium text-slate-800 focus:outline-none focus:border-indigo-500 cursor-pointer h-10 shadow-sm"
+                >
+                  <option value="">Global (Sin Liga)</option>
+                  {leagues.map(l => (
+                    <option key={l.code} value={l.code}>{l.name}</option>
+                  ))}
+                </select>
               </div>
-              <span className="font-bold text-slate-400 mt-6 select-none">:</span>
-              <div className="flex flex-col gap-1.5 w-20">
-                <label className="text-xs font-bold text-slate-600 text-center">Goles Vis.</label>
-                <input
-                  type="number"
-                  min="0"
-                  value={overrideAwayScore}
-                  onChange={(e) => setOverrideAwayScore(e.target.value)}
-                  className="bg-white border border-slate-200 rounded-lg p-2 text-center font-mono font-bold text-slate-800 focus:outline-none focus:border-indigo-500"
-                />
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-bold text-slate-600">2. Seleccionar Usuario</label>
+                <select
+                  value={overrideUserId}
+                  onChange={(e) => setOverrideUserId(e.target.value)}
+                  className="bg-white border border-slate-200 rounded-lg p-2 text-xs font-medium text-slate-800 focus:outline-none focus:border-indigo-500 cursor-pointer h-10 shadow-sm"
+                >
+                  <option value="">-- Seleccionar --</option>
+                  {filteredUsersForOverride.map(user => (
+                    <option key={user.id} value={user.id}>{user.avatar} {user.name}</option>
+                  ))}
+                </select>
               </div>
             </div>
 
-            {/* Action button */}
-            <button
-              onClick={handleSaveOverride}
-              disabled={isSavingOverride || !overrideUserId || !overrideMatchId || overrideHomeScore === '' || overrideAwayScore === ''}
-              className="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-xs shrink-0 cursor-pointer disabled:opacity-50 h-10"
-            >
-              {isSavingOverride ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              ) : (
-                <Save className="w-3.5 h-3.5" />
-              )}
-              Registrar Pronóstico
-            </button>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-slate-200/60 pt-4">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-bold text-slate-600">3. Filtrar por Fase del Partido</label>
+                <select
+                  value={overridePhase}
+                  onChange={(e) => setOverridePhase(e.target.value as MatchPhase | 'all')}
+                  className="bg-white border border-slate-200 rounded-lg p-2 text-xs font-medium text-slate-800 focus:outline-none focus:border-indigo-500 cursor-pointer h-10 shadow-sm"
+                >
+                  <option value="all">Todas las Fases</option>
+                  {(['group', 'dieciseisavos', 'octavos', 'cuartos', 'semifinal', 'final'] as MatchPhase[]).map(phase => (
+                    <option key={phase} value={phase}>{PHASES_LABELS[phase]}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-bold text-slate-600">4. Filtrar por Fecha</label>
+                <select
+                  value={overrideDate}
+                  onChange={(e) => setOverrideDate(e.target.value)}
+                  className="bg-white border border-slate-200 rounded-lg p-2 text-xs font-medium text-slate-800 focus:outline-none focus:border-indigo-500 cursor-pointer h-10 shadow-sm"
+                >
+                  <option value="all">Todas las Fechas</option>
+                  {overrideAvailableDates.map((dateStr) => {
+                    const [year, month, day] = dateStr.split('-').map(Number);
+                    const d = new Date(year, month - 1, day);
+                    const weekday = d.toLocaleDateString('es-ES', { weekday: 'short' }).replace('.', '');
+                    const capitalizedW = weekday.charAt(0).toUpperCase() + weekday.slice(1);
+                    return (
+                      <option key={dateStr} value={dateStr}>
+                        {capitalizedW} {day}/{month}/{year}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-4 border-t border-slate-200/60 pt-4 items-end">
+              <div className="flex flex-col gap-1.5 md:col-span-6">
+                <label className="text-xs font-bold text-slate-600">
+                  5. Seleccionar Partido 
+                  <span className="text-[10px] text-slate-450 font-normal ml-1.5">
+                    ({filteredMatchesForOverride.length} disponibles)
+                  </span>
+                </label>
+                <select
+                  value={overrideMatchId}
+                  onChange={(e) => setOverrideMatchId(e.target.value)}
+                  className="bg-white border border-slate-200 rounded-lg p-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-indigo-500 cursor-pointer h-10 shadow-sm"
+                >
+                  <option value="">-- Seleccionar Partido --</option>
+                  {filteredMatchesForOverride.map(match => {
+                    const matchDate = new Date(match.dateTime);
+                    const formattedTime = matchDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', hour12: false });
+                    const matchDateStr = getLocalDateStr(match.dateTime);
+                    const [year, month, day] = matchDateStr.split('-').map(Number);
+                    const label = `${match.homeTeam.flag} ${match.homeTeam.name} vs ${match.awayTeam.name} ${match.awayTeam.flag} (${day}/{month} ${formattedTime})`;
+                    return (
+                      <option key={match.id} value={match.id}>
+                        {label}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+
+              <div className="flex items-center justify-center gap-2.5 md:col-span-3 pb-0.5">
+                <div className="flex flex-col gap-1 items-center w-full">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase">Goles Local</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={overrideHomeScore}
+                    onChange={(e) => setOverrideHomeScore(e.target.value)}
+                    className="w-full bg-white border border-slate-200 rounded-lg h-10 text-center font-mono font-bold text-slate-800 focus:outline-none focus:border-indigo-500 shadow-sm"
+                  />
+                </div>
+                <span className="font-bold text-slate-400 mt-5 select-none">:</span>
+                <div className="flex flex-col gap-1 items-center w-full">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase">Goles Vis.</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={overrideAwayScore}
+                    onChange={(e) => setOverrideAwayScore(e.target.value)}
+                    className="w-full bg-white border border-slate-200 rounded-lg h-10 text-center font-mono font-bold text-slate-800 focus:outline-none focus:border-indigo-500 shadow-sm"
+                  />
+                </div>
+              </div>
+
+              <div className="md:col-span-3">
+                <button
+                  onClick={handleSaveOverride}
+                  disabled={isSavingOverride || !overrideUserId || !overrideMatchId || overrideHomeScore === '' || overrideAwayScore === ''}
+                  className="w-full h-10 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-xs shrink-0 cursor-pointer disabled:opacity-50"
+                >
+                  {isSavingOverride ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Save className="w-3.5 h-3.5" />
+                  )}
+                  Registrar Pronóstico
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
 
       {/* Matches editor list */}
-      <div className="space-y-4" id="admin-matches-editor">
-        {matches.map((match) => {
-          const edit = editingScores[match.id];
-          const homeScoreVal = edit !== undefined ? edit.home : (match.homeScore !== undefined ? match.homeScore : 0);
-          const awayScoreVal = edit !== undefined ? edit.away : (match.awayScore !== undefined ? match.awayScore : 0);
-          const statusVal = edit !== undefined ? edit.status : match.status;
-          const minuteVal = edit !== undefined && edit.minute !== undefined 
-            ? edit.minute 
-            : (match.liveStartTimestamp 
-              ? Math.max(0, Math.floor((Date.now() - match.liveStartTimestamp) / 60000))
-              : (Math.floor((Date.now() - new Date(match.dateTime).getTime()) / 60000) > 0 
-                ? Math.max(0, Math.min(120, Math.floor((Date.now() - new Date(match.dateTime).getTime()) / 60000))) 
-                : 0));
+      <div className="space-y-6" id="admin-matches-editor">
+        <div className="border-b border-slate-100 pb-2">
+          <h3 className="text-sm font-bold text-slate-800 font-sans uppercase tracking-wider">Editor de Partidos Oficiales</h3>
+          <p className="text-[10px] text-slate-500 mt-0.5">Filtra por fase y fecha para encontrar y gestionar los encuentros rápidamente.</p>
+        </div>
 
-          return (
-            <div
-              key={match.id}
-              className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 flex flex-col md:flex-row items-center justify-between gap-4 text-xs shadow-xs"
-            >
-              {/* Match Details */}
-              <div className="flex items-center justify-between md:justify-start gap-4 w-full md:w-auto">
-                <div className="text-left">
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <span className="px-2 py-0.5 bg-slate-200 text-slate-700 font-bold text-[9px] rounded-md uppercase block w-max uppercase tracking-wider font-mono">
-                      {match.phase}
-                    </span>
-                    {match.status === 'live' && (
-                      <span className="px-2 py-0.5 bg-rose-100 text-rose-700 font-bold text-[9px] rounded-md uppercase block w-max tracking-wider font-mono animate-pulse">
-                        🔴 EN VIVO
-                      </span>
-                    )}
-                    {match.status === 'finished' && (
-                      <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 font-bold text-[9px] rounded-md uppercase block w-max tracking-wider font-mono">
-                        ✓ TERMINADO
-                      </span>
-                    )}
-                  </div>
-                  
-                  <div className="flex flex-wrap items-center gap-2 mt-1 select-none">
-                    <select
-                      value={editingTeams[match.id]?.homeId || match.homeTeam.id}
-                      onChange={(e) => {
-                        const teamId = e.target.value;
-                        setEditingTeams(prev => ({
-                          ...prev,
-                          [match.id]: { ...prev[match.id], homeId: teamId }
-                        }));
-                      }}
-                      className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-semibold text-slate-800 focus:outline-none focus:border-indigo-500 cursor-pointer max-w-[125px]"
-                    >
-                      {SELECTABLE_TEAMS.map(t => (
-                        <option key={t.id} value={t.id}>{t.flag} {t.name}</option>
-                      ))}
-                    </select>
-                    
-                    {match.homeScore !== undefined || match.awayScore !== undefined ? (
-                      <span className="px-2 py-0.5 bg-slate-900 text-white font-mono font-extrabold text-[10px] rounded-md shadow-xs select-none flex items-center gap-1 mx-1 shrink-0">
-                        {match.homeScore ?? 0} - {match.awayScore ?? 0}
-                        {match.status === 'live' && (
-                          <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping inline-block"></span>
-                        )}
-                      </span>
-                    ) : (
-                      <span className="text-slate-400 font-mono mx-1 shrink-0">vs</span>
-                    )}
+        {/* Phase tabs for Admin Editor */}
+        <div className="bg-slate-105 bg-slate-100/80 p-1.5 rounded-xl flex flex-wrap gap-1.5 select-none" id="admin-editor-phase-tabs">
+          {(['group', 'dieciseisavos', 'octavos', 'cuartos', 'semifinal', 'final'] as MatchPhase[]).map((phase) => {
+            const isActive = activePhaseFilter === phase;
+            const phaseMatchesCount = matches.filter(m => m.phase === phase).length;
+            return (
+              <button
+                key={phase}
+                type="button"
+                onClick={() => {
+                  setActivePhaseFilter(phase);
+                  setActiveDateFilter('all');
+                }}
+                className={`flex-1 min-w-[120px] text-center px-3 py-2 rounded-lg text-[11px] font-bold transition-all border active:scale-98 cursor-pointer flex flex-col items-center justify-center gap-0.5 ${
+                  isActive
+                    ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm font-extrabold'
+                    : 'bg-white border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                }`}
+              >
+                <span>{PHASES_LABELS[phase]}</span>
+                <span className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold ${
+                  isActive ? 'bg-indigo-500/80 text-white' : 'bg-slate-200 text-slate-600'
+                }`}>
+                  {phaseMatchesCount} partidos
+                </span>
+              </button>
+            );
+          })}
+        </div>
 
-                    <select
-                      value={editingTeams[match.id]?.awayId || match.awayTeam.id}
-                      onChange={(e) => {
-                        const teamId = e.target.value;
-                        setEditingTeams(prev => ({
-                          ...prev,
-                          [match.id]: { ...prev[match.id], awayId: teamId }
-                        }));
-                      }}
-                      className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-semibold text-slate-800 focus:outline-none focus:border-indigo-500 cursor-pointer max-w-[125px]"
-                    >
-                      {SELECTABLE_TEAMS.map(t => (
-                        <option key={t.id} value={t.id}>{t.flag} {t.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              </div>
+        {/* Date Filters for Admin Editor */}
+        {availableDatesInPhase.length > 1 && (
+          <div className="flex flex-col gap-1.5 select-none pt-1">
+            <div className="flex gap-1.5 overflow-x-auto pb-1.5 scrollbar-thin scrollbar-thumb-slate-200">
+              <button
+                type="button"
+                onClick={() => setActiveDateFilter('all')}
+                className={`px-3 py-1.5 text-xs font-bold rounded-full whitespace-nowrap transition-all border shrink-0 ${
+                  activeDateFilter === 'all'
+                    ? 'bg-slate-800 border-slate-800 text-white shadow-sm'
+                    : 'bg-slate-50 border-slate-200/60 text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                }`}
+              >
+                📅 Todos los Días ({matches.filter(m => m.phase === activePhaseFilter).length} partidos)
+              </button>
+              {availableDatesInPhase.map((dateStr) => {
+                const isSelected = activeDateFilter === dateStr;
+                
+                const [year, month, day] = dateStr.split('-').map(Number);
+                const d = new Date(year, month - 1, day);
+                const weekday = d.toLocaleDateString('es-ES', { weekday: 'short' }).replace('.', '');
+                const capitalizedW = weekday.charAt(0).toUpperCase() + weekday.slice(1);
+                const label = `${capitalizedW} ${day}`;
 
-              {/* Status & Scores Controls */}
-              <div className="flex flex-wrap items-center justify-between sm:justify-start gap-4 w-full md:w-auto grow md:grow-0">
-                {/* Status selector */}
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase">Estado Match</label>
-                  <select
-                    id={`admin-status-select-${match.id}`}
-                    value={statusVal}
-                    onChange={(e) => handleStatusChange(match.id, e.target.value as Match['status'], match)}
-                    className="bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 font-semibold focus:outline-none focus:border-indigo-500 cursor-pointer"
+                const dayMatchesCount = matches.filter(m => m.phase === activePhaseFilter && getLocalDateStr(m.dateTime) === dateStr).length;
+
+                return (
+                  <button
+                    key={dateStr}
+                    type="button"
+                    onClick={() => setActiveDateFilter(dateStr)}
+                    className={`px-3 py-1.5 text-xs font-bold rounded-full whitespace-nowrap transition-all border shrink-0 flex items-center gap-1.5 ${
+                      isSelected
+                        ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm'
+                        : 'bg-slate-50 border-slate-200/60 text-slate-600 hover:text-indigo-950 hover:bg-slate-100'
+                    }`}
                   >
-                    <option value="scheduled">Scheduled (Programado)</option>
-                    <option value="live">Live (En Curso)</option>
-                    <option value="finished">Finished (Terminado)</option>
-                  </select>
-                </div>
-
-                {/* Score input fields */}
-                <div className="flex items-center gap-1.5">
-                  <div className="flex flex-col gap-1 items-center">
-                    <label className="text-[10px] font-bold text-slate-500 uppercase">Goles Local</label>
-                    <input
-                      id={`admin-score-home-${match.id}`}
-                      type="number"
-                      min="0"
-                      value={homeScoreVal}
-                      onChange={(e) => handleLocalScoreChange(match.id, 'home', e.target.value, match)}
-                      className="w-14 bg-white border border-slate-200 rounded-lg py-1.5 text-center font-mono font-bold text-slate-850 focus:outline-none focus:border-indigo-500 disabled:bg-slate-100 disabled:text-slate-400"
-                    />
-                  </div>
-
-                  <span className="font-bold text-slate-450 mt-4 text-slate-400 select-none">:</span>
-
-                  <div className="flex flex-col gap-1 items-center">
-                    <label className="text-[10px] font-bold text-slate-500 uppercase">Goles Vis.</label>
-                    <input
-                      id={`admin-score-away-${match.id}`}
-                      type="number"
-                      min="0"
-                      value={awayScoreVal}
-                      onChange={(e) => handleLocalScoreChange(match.id, 'away', e.target.value, match)}
-                      className="w-14 bg-white border border-slate-200 rounded-lg py-1.5 text-center font-mono font-bold text-slate-850 focus:outline-none focus:border-indigo-500 disabled:bg-slate-100 disabled:text-slate-400"
-                    />
-                  </div>
-
-                  {statusVal === 'live' && (
-                    <div className="flex flex-col gap-1 items-center ml-2 border-l border-slate-200 pl-3">
-                      <label className="text-[10px] font-bold text-indigo-600 uppercase">Minuto</label>
-                      <input
-                        type="number"
-                        min="0"
-                        max="120"
-                        value={minuteVal}
-                        onChange={(e) => handleMinuteChange(match.id, e.target.value, match)}
-                        className="w-14 bg-indigo-50 border border-indigo-200 rounded-lg py-1.5 text-center font-mono font-bold text-indigo-900 focus:outline-none focus:border-indigo-500"
-                      />
-                    </div>
-                  )}
-                </div>
-
-                {/* Save button */}
-                <button
-                  id={`admin-save-btn-${match.id}`}
-                  onClick={() => handleSaveResult(match.id, match)}
-                  className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl flex items-center justify-center gap-1 transition-all md:mt-4 shadow-xs grow sm:grow-0 cursor-pointer"
-                >
-                  <Save className="w-3.5 h-3.5" />
-                  Guardar
-                </button>
-              </div>
+                    <span>{label}</span>
+                    <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold font-mono ${
+                      isSelected ? 'bg-indigo-500/80 text-white' : 'bg-slate-200 text-slate-600'
+                    }`}>
+                      {dayMatchesCount}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
-          );
-        })}
+          </div>
+        )}
+
+        {/* Matches list */}
+        <div className="space-y-4">
+          {(() => {
+            const filteredMatches = matches.filter(m => {
+              if (m.phase !== activePhaseFilter) return false;
+              if (activeDateFilter !== 'all' && getLocalDateStr(m.dateTime) !== activeDateFilter) return false;
+              return true;
+            });
+
+            if (filteredMatches.length === 0) {
+              return (
+                <div className="text-center py-12 text-slate-400 font-medium bg-slate-50/20 border border-dashed border-slate-200 rounded-2xl">
+                  No hay partidos programados o que coincidan con los filtros seleccionados para esta fase.
+                </div>
+              );
+            }
+
+            return filteredMatches.map((match) => {
+              const edit = editingScores[match.id];
+              const homeScoreVal = edit !== undefined ? edit.home : (match.homeScore !== undefined ? match.homeScore : 0);
+              const awayScoreVal = edit !== undefined ? edit.away : (match.awayScore !== undefined ? match.awayScore : 0);
+              const statusVal = edit !== undefined ? edit.status : match.status;
+              const minuteVal = edit !== undefined && edit.minute !== undefined 
+                ? edit.minute 
+                : (match.liveStartTimestamp 
+                  ? Math.max(0, Math.floor((Date.now() - match.liveStartTimestamp) / 60000))
+                  : (Math.floor((Date.now() - new Date(match.dateTime).getTime()) / 60000) > 0 
+                    ? Math.max(0, Math.min(120, Math.floor((Date.now() - new Date(match.dateTime).getTime()) / 60000))) 
+                    : 0));
+
+              return (
+                <div
+                  key={match.id}
+                  className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 flex flex-col md:flex-row items-center justify-between gap-4 text-xs shadow-xs hover:border-slate-300 transition-all"
+                >
+                  {/* Match Details */}
+                  <div className="flex items-center justify-between md:justify-start gap-4 w-full md:w-auto">
+                    <div className="text-left">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <span className="px-2 py-0.5 bg-slate-200 text-slate-700 font-bold text-[9px] rounded-md uppercase block w-max uppercase tracking-wider font-mono">
+                          {match.phase}
+                        </span>
+                        {match.status === 'live' && (
+                          <span className="px-2 py-0.5 bg-rose-100 text-rose-700 font-bold text-[9px] rounded-md uppercase block w-max tracking-wider font-mono animate-pulse">
+                            🔴 EN VIVO
+                          </span>
+                        )}
+                        {match.status === 'finished' && (
+                          <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 font-bold text-[9px] rounded-md uppercase block w-max tracking-wider font-mono">
+                            ✓ TERMINADO
+                          </span>
+                        )}
+                      </div>
+                      
+                      <div className="flex flex-wrap items-center gap-2 mt-1 select-none">
+                        <select
+                          value={editingTeams[match.id]?.homeId || match.homeTeam.id}
+                          onChange={(e) => {
+                            const teamId = e.target.value;
+                            setEditingTeams(prev => ({
+                              ...prev,
+                              [match.id]: { ...prev[match.id], homeId: teamId }
+                            }));
+                          }}
+                          className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-semibold text-slate-800 focus:outline-none focus:border-indigo-500 cursor-pointer max-w-[125px]"
+                        >
+                          {SELECTABLE_TEAMS.map(t => (
+                            <option key={t.id} value={t.id}>{t.flag} {t.name}</option>
+                          ))}
+                        </select>
+                        
+                        {match.homeScore !== undefined || match.awayScore !== undefined ? (
+                          <span className="px-2 py-0.5 bg-slate-900 text-white font-mono font-extrabold text-[10px] rounded-md shadow-xs select-none flex items-center gap-1 mx-1 shrink-0">
+                            {match.homeScore ?? 0} - {match.awayScore ?? 0}
+                            {match.status === 'live' && (
+                              <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping inline-block"></span>
+                            )}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 font-mono mx-1 shrink-0">vs</span>
+                        )}
+
+                        <select
+                          value={editingTeams[match.id]?.awayId || match.awayTeam.id}
+                          onChange={(e) => {
+                            const teamId = e.target.value;
+                            setEditingTeams(prev => ({
+                              ...prev,
+                              [match.id]: { ...prev[match.id], awayId: teamId }
+                            }));
+                          }}
+                          className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-semibold text-slate-800 focus:outline-none focus:border-indigo-500 cursor-pointer max-w-[125px]"
+                        >
+                          {SELECTABLE_TEAMS.map(t => (
+                            <option key={t.id} value={t.id}>{t.flag} {t.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Status & Scores Controls */}
+                  <div className="flex flex-wrap items-center justify-between sm:justify-start gap-4 w-full md:w-auto grow md:grow-0">
+                    {/* Status selector */}
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] font-bold text-slate-500 uppercase">Estado Match</label>
+                      <select
+                        id={`admin-status-select-${match.id}`}
+                        value={statusVal}
+                        onChange={(e) => handleStatusChange(match.id, e.target.value as Match['status'], match)}
+                        className="bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 font-semibold focus:outline-none focus:border-indigo-500 cursor-pointer"
+                      >
+                        <option value="scheduled">Scheduled (Programado)</option>
+                        <option value="live">Live (En Curso)</option>
+                        <option value="finished">Finished (Terminado)</option>
+                      </select>
+                    </div>
+
+                    {/* Score input fields */}
+                    <div className="flex items-center gap-1.5">
+                      <div className="flex flex-col gap-1 items-center">
+                        <label className="text-[10px] font-bold text-slate-500 uppercase">Goles Local</label>
+                        <input
+                          id={`admin-score-home-${match.id}`}
+                          type="number"
+                          min="0"
+                          value={homeScoreVal}
+                          onChange={(e) => handleLocalScoreChange(match.id, 'home', e.target.value, match)}
+                          className="w-14 bg-white border border-slate-200 rounded-lg py-1.5 text-center font-mono font-bold text-slate-850 focus:outline-none focus:border-indigo-500 disabled:bg-slate-100 disabled:text-slate-400"
+                        />
+                      </div>
+
+                      <span className="font-bold text-slate-450 mt-4 text-slate-400 select-none">:</span>
+
+                      <div className="flex flex-col gap-1 items-center">
+                        <label className="text-[10px] font-bold text-slate-500 uppercase">Goles Vis.</label>
+                        <input
+                          id={`admin-score-away-${match.id}`}
+                          type="number"
+                          min="0"
+                          value={awayScoreVal}
+                          onChange={(e) => handleLocalScoreChange(match.id, 'away', e.target.value, match)}
+                          className="w-14 bg-white border border-slate-200 rounded-lg py-1.5 text-center font-mono font-bold text-slate-850 focus:outline-none focus:border-indigo-500 disabled:bg-slate-100 disabled:text-slate-400"
+                        />
+                      </div>
+
+                      {statusVal === 'live' && (
+                        <div className="flex flex-col gap-1 items-center ml-2 border-l border-slate-200 pl-3">
+                          <label className="text-[10px] font-bold text-indigo-600 uppercase">Minuto</label>
+                          <input
+                            type="number"
+                            min="0"
+                            max="120"
+                            value={minuteVal}
+                            onChange={(e) => handleMinuteChange(match.id, e.target.value, match)}
+                            className="w-14 bg-indigo-50 border border-indigo-200 rounded-lg py-1.5 text-center font-mono font-bold text-indigo-900 focus:outline-none focus:border-indigo-500"
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Save button */}
+                    <button
+                      id={`admin-save-btn-${match.id}`}
+                      onClick={() => handleSaveResult(match.id, match)}
+                      className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl flex items-center justify-center gap-1 transition-all md:mt-4 shadow-xs grow sm:grow-0 cursor-pointer"
+                    >
+                      <Save className="w-3.5 h-3.5" />
+                      Guardar
+                    </button>
+                  </div>
+                </div>
+              );
+            });
+          })()}
+        </div>
       </div>
     </div>
   );
