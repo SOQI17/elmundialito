@@ -1,10 +1,58 @@
-/**
- * Helper to perform synchronization of matches from football-data.org to Firestore.
- * 
- * @param {import('firebase-admin/firestore').Firestore} db
- * @param {string} apiToken
- * @returns {Promise<{ updatedCount: number, matchesSynced: number }>}
- */
+function stagesAlign(apiStage, localPhase) {
+  const mapping = {
+    'GROUP_STAGE': 'group',
+    'LAST_32': 'dieciseisavos',
+    'LAST_16': 'octavos',
+    'QUARTER_FINALS': 'cuartos',
+    'SEMI_FINALS': 'semifinal',
+    'FINAL': 'final',
+    'THIRD_PLACE': 'final'
+  };
+  return mapping[apiStage] === localPhase;
+}
+
+function buildLocalTeam(apiTeam) {
+  if (!apiTeam || !apiTeam.tla) return null;
+  const tla = apiTeam.tla;
+  
+  const flags = {
+    'ALG': '🇩🇿', 'ARG': '🇦🇷', 'AUS': '🇦🇺', 'AUT': '🇦🇹',
+    'BEL': '🇧🇪', 'BIH': '🇧🇦', 'BRA': '🇧🇷', 'CAN': '🇨🇦',
+    'CIV': '🇨🇮', 'COD': '🇨🇩', 'COL': '🇨🇴', 'CPV': '🇨🇻',
+    'CRO': '🇭🇷', 'CUW': '🇨🇼', 'CZE': '🇨🇿', 'ECU': '🇪🇨',
+    'EGY': '🇪🇬', 'ENG': '🏴󠁧󠁢󠁥󠁮󠁧󠁿', 'ESP': '🇪🇸', 'FRA': '🇫🇷',
+    'GER': '🇩🇪', 'GHA': '🇬🇭', 'HAI': '🇭🇹', 'IRN': '🇮🇷',
+    'IRQ': '🇮🇶', 'JOR': '🇯🇴', 'JPN': '🇯🇵', 'KOR': '🇰🇷',
+    'KSA': '🇸🇦', 'MAR': '🇲🇦', 'MEX': '🇲🇽', 'NED': '🇳🇱',
+    'NOR': '🇳🇴', 'NZL': '🇳🇿', 'PAN': '🇵🇦', 'PAR': '🇵🇾',
+    'POR': '🇵🇹', 'QAT': '🇶🇦', 'RSA': '🇿🇦', 'SCO': '🏴󠁧󠁢󠁳󠁣󠁴󠁿',
+    'SEN': '🇸🇳', 'SUI': '🇨🇭', 'SWE': '🇸🇪', 'TUN': '🇹🇳',
+    'TUR': '🇹🇷', 'URU': '🇺🇾', 'USA': '🇺🇸', 'UZB': '🇺🇿'
+  };
+
+  const names = {
+    'ALG': 'Argelia', 'ARG': 'Argentina', 'AUS': 'Australia', 'AUT': 'Austria',
+    'BEL': 'Bélgica', 'BIH': 'Bosnia y H.', 'BRA': 'Brasil', 'CAN': 'Canadá',
+    'CIV': 'Costa de Marfil', 'COD': 'R. D. Congo', 'COL': 'Colombia', 'CPV': 'Cabo Verde',
+    'CRO': 'Croacia', 'CUW': 'Curazao', 'CZE': 'República Checa', 'ECU': 'Ecuador',
+    'EGY': 'Egipto', 'ENG': 'Inglaterra', 'ESP': 'España', 'FRA': 'Francia',
+    'GER': 'Alemania', 'GHA': 'Ghana', 'HAI': 'Haití', 'IRN': 'Irán',
+    'IRQ': 'Irak', 'JOR': 'Jordania', 'JPN': 'Japón', 'KOR': 'Corea del Sur',
+    'KSA': 'Arabia Saudita', 'MAR': 'Marruecos', 'MEX': 'México', 'NED': 'Países Bajos',
+    'NOR': 'Noruega', 'NZL': 'Nueva Zelanda', 'PAN': 'Panamá', 'PAR': 'Paraguay',
+    'POR': 'Portugal', 'QAT': 'Catar', 'RSA': 'Sudáfrica', 'SCO': 'Escocia',
+    'SEN': 'Senegal', 'SUI': 'Suiza', 'SWE': 'Suecia', 'TUN': 'Túnez',
+    'TUR': 'Turquía', 'URU': 'Uruguay', 'USA': 'EE. UU.', 'UZB': 'Uzbekistán'
+  };
+
+  return {
+    id: tla,
+    name: names[tla] || apiTeam.name || apiTeam.shortName || tla,
+    flag: flags[tla] || '🏳️',
+    group: 'Eliminatoria'
+  };
+}
+
 export async function performSync(db, apiToken) {
   if (!apiToken) {
     throw new Error("Missing apiToken for football-data.org");
@@ -101,6 +149,16 @@ export async function performSync(db, apiToken) {
       });
     }
 
+    // Check 4: Match by Stage & Date Proximity (for knockout stages when teams are placeholders)
+    if (!localMatch && apiM.stage !== "GROUP_STAGE") {
+      const apiTime = new Date(apiM.utcDate).getTime();
+      localMatch = localMatches.find(m => {
+        const localTime = new Date(m.dateTime).getTime();
+        const timeDiffHours = Math.abs(apiTime - localTime) / (1000 * 60 * 60);
+        return stagesAlign(apiM.stage, m.phase) && timeDiffHours <= 4;
+      });
+    }
+
     if (!localMatch) {
       // No match found in our local schedule, skip
       continue;
@@ -109,6 +167,28 @@ export async function performSync(db, apiToken) {
     // Prepare update data
     const updateData = {};
     let needsUpdate = false;
+
+    // Check if the local match has placeholder teams that should be updated
+    const isPlaceholder = (team) => {
+      if (!team || !team.id) return true;
+      return team.id === "TBD_TBA" || team.id.length < 3 || /\d/.test(team.id);
+    };
+
+    if (isPlaceholder(localMatch.homeTeam) && apiM.homeTeam && apiM.homeTeam.tla) {
+      const newHome = buildLocalTeam(apiM.homeTeam);
+      if (newHome) {
+        updateData.homeTeam = newHome;
+        needsUpdate = true;
+      }
+    }
+
+    if (isPlaceholder(localMatch.awayTeam) && apiM.awayTeam && apiM.awayTeam.tla) {
+      const newAway = buildLocalTeam(apiM.awayTeam);
+      if (newAway) {
+        updateData.awayTeam = newAway;
+        needsUpdate = true;
+      }
+    }
 
     // Check status
     if (localMatch.status !== targetStatus) {

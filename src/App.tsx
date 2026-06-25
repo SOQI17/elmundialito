@@ -8,7 +8,7 @@ import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { db, auth, handleFirestoreError, OperationType, functions } from './firebase';
 import { httpsCallable } from 'firebase/functions';
 
-import { Trophy, Calendar, Settings, Lightbulb, BookOpen, Users, LogOut, Pencil } from 'lucide-react';
+import { Trophy, Calendar, Settings, Lightbulb, BookOpen, Users, LogOut, Pencil, Globe } from 'lucide-react';
 
 import LeagueSelector from './components/LeagueSelector';
 import MatchesList from './components/MatchesList';
@@ -19,6 +19,7 @@ import AuthScreen from './components/AuthScreen';
 import EditProfileModal from './components/Editprofilemodal';
 import OnboardingScreen from './components/Onboardingscreen';
 import ForceBootstrap from './components/Forcebootstrap';
+import WorldStandings from './components/WorldStandings';
 
 
 
@@ -31,7 +32,7 @@ const isAdminEmail = (email: string | null | undefined): boolean => {
 };
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'leagues' | 'calendar' | 'leaderboard' | 'sandbox' | 'admin'>('calendar');
+  const [activeTab, setActiveTab] = useState<'leagues' | 'calendar' | 'leaderboard' | 'sandbox' | 'world-standings' | 'admin'>('calendar');
   const [showForceBootstrap, setShowForceBootstrap] = useState(false);
 
   // Auth
@@ -1102,6 +1103,7 @@ export default function App() {
               { id: 'calendar', label: 'Partidos', icon: <Calendar className="w-4 h-4" /> },
               { id: 'leaderboard', label: 'Clasificación', icon: <Trophy className="w-4 h-4" /> },
               { id: 'leagues', label: 'Mi Cuenta / Ligas', icon: <Users className="w-4 h-4" /> },
+              { id: 'world-standings', label: 'Tabla Mundial', icon: <Globe className="w-4 h-4" /> },
               { id: 'sandbox', label: 'Reglas de Puntos', icon: <BookOpen className="w-4 h-4" /> },
             ].map(tab => (
               <button
@@ -1307,7 +1309,8 @@ export default function App() {
               onRemoveMember={handleRemoveMember}
             />
           )}
-          {activeTab === 'sandbox' && <InteractiveSandbox />}
+           {activeTab === 'sandbox' && <InteractiveSandbox />}
+          {activeTab === 'world-standings' && <WorldStandings matches={matches} />}
           {activeTab === 'admin' && isRealAdmin && (
             <AdminPanel
               matches={matches}
