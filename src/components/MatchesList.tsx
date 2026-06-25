@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Match, MatchPhase, Forecast, UserProfile, League, LeagueMemberInfo } from '../types';
+import { Match, MatchPhase, Forecast, UserProfile, League, LeagueMemberInfo, Team } from '../types';
 import { Lock, Unlock, Calendar, Eye, Activity, CheckSquare, Sparkles, Tv, AlertCircle } from 'lucide-react';
 import LiveMatchSimulator from './LiveMatchSimulator';
 import TeamFlag from './TeamFlag';
@@ -14,7 +14,12 @@ interface MatchesListProps {
     matchId: string,
     homeScore: number | undefined,
     awayScore: number | undefined,
-    status: Match['status']
+    status: Match['status'],
+    mode?: Match['mode'],
+    liveStartTimestamp?: number | null,
+    incidents?: Match['incidents'],
+    homeTeam?: Team,
+    awayTeam?: Team
   ) => void;
   currentLeague?: League | null;
   allLeagues?: League[];

@@ -1,13 +1,24 @@
-import React, { useState } from 'react';
-import { Match, MatchPhase, League, LeagueMemberInfo, UserProfile } from '../types';
+import React, { useState, useMemo } from 'react';
+import { Match, MatchPhase, League, LeagueMemberInfo, UserProfile, Team } from '../types';
 import { Settings, Save, RefreshCw, AlertTriangle, Play, CheckCircle, Globe, Wifi, Check, Sparkles, Loader2, Link2, AlertCircle, Trash2, Edit3, Users } from 'lucide-react';
 import TeamFlag from './TeamFlag';
+import { TEAMS } from '../data';
 
 
 
 interface AdminPanelProps {
   matches: Match[];
-  onUpdateMatchResult: (matchId: string, homeScore: number | undefined, awayScore: number | undefined, status: Match['status'], mode?: Match['mode'], liveStartTimestamp?: number | null, incidents?: Match['incidents']) => void;
+  onUpdateMatchResult: (
+    matchId: string,
+    homeScore: number | undefined,
+    awayScore: number | undefined,
+    status: Match['status'],
+    mode?: Match['mode'],
+    liveStartTimestamp?: number | null,
+    incidents?: Match['incidents'],
+    homeTeam?: Team,
+    awayTeam?: Team
+  ) => void;
   onResetAllData: () => void;
   onTriggerBootstrap?: () => void;
   leagues?: League[];
@@ -39,6 +50,17 @@ export default function AdminPanel({
   onSyncMatchesFromAPI
 }: AdminPanelProps) {
   const [editingScores, setEditingScores] = useState<Record<string, { home: number; away: number; status: Match['status']; minute?: number }>>({});
+  const [editingTeams, setEditingTeams] = useState<Record<string, { homeId?: string; awayId?: string }>>({});
+
+  const SELECTABLE_TEAMS = useMemo(() => {
+    return Object.values(TEAMS).sort((a, b) => {
+      const aPl = a.group === 'Eliminatoria';
+      const bPl = b.group === 'Eliminatoria';
+      if (aPl && !bPl) return 1;
+      if (!aPl && bPl) return -1;
+      return a.name.localeCompare(b.name);
+    });
+  }, []);
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
   const [syncMessage, setSyncMessage] = useState<string>('');
 
@@ -218,7 +240,11 @@ export default function AdminPanel({
 
   const handleSaveResult = async (matchId: string, currentMatch: Match) => {
     const edit = editingScores[matchId];
+    const teamEdit = editingTeams[matchId];
     try {
+      const homeTeam = teamEdit?.homeId ? TEAMS[teamEdit.homeId] : undefined;
+      const awayTeam = teamEdit?.awayId ? TEAMS[teamEdit.awayId] : undefined;
+
       if (edit) {
         // Si el estado es live y se especificó/editó el minuto, calcular liveStartTimestamp
         let calculatedTimestamp: number | null = null;
@@ -232,14 +258,19 @@ export default function AdminPanel({
                 : 0));
           calculatedTimestamp = Date.now() - (currentMinute * 60000);
         }
-        await onUpdateMatchResult(matchId, edit.home, edit.away, edit.status, undefined, calculatedTimestamp);
+        await onUpdateMatchResult(matchId, edit.home, edit.away, edit.status, undefined, calculatedTimestamp, undefined, homeTeam, awayTeam);
       } else {
         // Si no ha editado valores directamente pero hace clic, guardar con actuales
         await onUpdateMatchResult(
           matchId, 
           currentMatch.homeScore !== undefined ? currentMatch.homeScore : 0, 
           currentMatch.awayScore !== undefined ? currentMatch.awayScore : 0, 
-          currentMatch.status
+          currentMatch.status,
+          undefined,
+          null,
+          undefined,
+          homeTeam,
+          awayTeam
         );
       }
       
@@ -247,6 +278,10 @@ export default function AdminPanel({
       const copy = { ...editingScores };
       delete copy[matchId];
       setEditingScores(copy);
+
+      const copyTeams = { ...editingTeams };
+      delete copyTeams[matchId];
+      setEditingTeams(copyTeams);
     } catch (err: any) {
       console.error("Error saving match result:", err);
       alert(`⚠️ ERROR AL GUARDAR EN FIRESTORE:\n\n${err.message || err}\n\nPor favor, verifica tus permisos o conexión.`);
@@ -749,23 +784,49 @@ export default function AdminPanel({
                     )}
                   </div>
                   
-                  <div className="flex items-center gap-2 mt-1">
-                    <TeamFlag team={match.homeTeam} size="md" interactive={false} />
-                    <span className="font-bold text-slate-800 text-xs w-20 truncate">{match.homeTeam.name}</span>
+                  <div className="flex flex-wrap items-center gap-2 mt-1 select-none">
+                    <select
+                      value={editingTeams[match.id]?.homeId || match.homeTeam.id}
+                      onChange={(e) => {
+                        const teamId = e.target.value;
+                        setEditingTeams(prev => ({
+                          ...prev,
+                          [match.id]: { ...prev[match.id], homeId: teamId }
+                        }));
+                      }}
+                      className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-semibold text-slate-800 focus:outline-none focus:border-indigo-500 cursor-pointer max-w-[125px]"
+                    >
+                      {SELECTABLE_TEAMS.map(t => (
+                        <option key={t.id} value={t.id}>{t.flag} {t.name}</option>
+                      ))}
+                    </select>
                     
                     {match.homeScore !== undefined || match.awayScore !== undefined ? (
-                      <span className="px-2 py-0.5 bg-slate-900 text-white font-mono font-extrabold text-[10px] rounded-md shadow-xs select-none flex items-center gap-1 mx-1">
+                      <span className="px-2 py-0.5 bg-slate-900 text-white font-mono font-extrabold text-[10px] rounded-md shadow-xs select-none flex items-center gap-1 mx-1 shrink-0">
                         {match.homeScore ?? 0} - {match.awayScore ?? 0}
                         {match.status === 'live' && (
                           <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping inline-block"></span>
                         )}
                       </span>
                     ) : (
-                      <span className="text-slate-400 font-mono mx-1">vs</span>
+                      <span className="text-slate-400 font-mono mx-1 shrink-0">vs</span>
                     )}
 
-                    <TeamFlag team={match.awayTeam} size="md" interactive={false} />
-                    <span className="font-bold text-slate-800 text-xs w-23 truncate text-left">{match.awayTeam.name}</span>
+                    <select
+                      value={editingTeams[match.id]?.awayId || match.awayTeam.id}
+                      onChange={(e) => {
+                        const teamId = e.target.value;
+                        setEditingTeams(prev => ({
+                          ...prev,
+                          [match.id]: { ...prev[match.id], awayId: teamId }
+                        }));
+                      }}
+                      className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-semibold text-slate-800 focus:outline-none focus:border-indigo-500 cursor-pointer max-w-[125px]"
+                    >
+                      {SELECTABLE_TEAMS.map(t => (
+                        <option key={t.id} value={t.id}>{t.flag} {t.name}</option>
+                      ))}
+                    </select>
                   </div>
                 </div>
               </div>

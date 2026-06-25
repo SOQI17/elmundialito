@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Match, UserProfile, MatchIncident } from '../types';
+import { Match, UserProfile, MatchIncident, Team } from '../types';
 import { Play, Pause, X, Radio, RefreshCw, Trophy, Zap, AlertCircle, ArrowUpRight, Shield, Clock, Eye, ToggleLeft, Send, Sparkles } from 'lucide-react';
 import TeamFlag from './TeamFlag';
 
@@ -13,8 +13,10 @@ interface LiveMatchSimulatorProps {
     awayScore: number | undefined,
     status: Match['status'],
     mode?: Match['mode'],
-    liveStartTimestamp?: number,
-    incidents?: Match['incidents']
+    liveStartTimestamp?: number | null,
+    incidents?: Match['incidents'],
+    homeTeam?: Team,
+    awayTeam?: Team
   ) => void;
 }
 
