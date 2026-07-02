@@ -279,7 +279,7 @@ export default function Leaderboard({
             else if (result.category === 'none') noMatchesCount++;
 
             // Penalty shootout scoring
-            if (match.phase !== 'group' && match.homeScore === match.awayScore) {
+            if (match.phase !== 'group' && match.homeScore === match.awayScore && forecast.homeScore === forecast.awayScore) {
               const penResult = calculatePenaltyScore(
                 match.homePenalties,
                 match.awayPenalties,

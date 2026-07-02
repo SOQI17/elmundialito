@@ -210,8 +210,9 @@ export default function MatchesList({
     if (team === 'home') homeS = Math.max(0, homeS + step);
     else awayS = Math.max(0, awayS + step);
 
-    const homeP = draft?.homePenalties !== undefined ? draft.homePenalties : (forecast?.homePenalties || 0);
-    const awayP = draft?.awayPenalties !== undefined ? draft.awayPenalties : (forecast?.awayPenalties || 0);
+    const isNewDraw = homeS === awayS;
+    const homeP = isNewDraw ? (draft?.homePenalties !== undefined ? draft.homePenalties : (forecast?.homePenalties !== undefined ? forecast.homePenalties : undefined)) : undefined;
+    const awayP = isNewDraw ? (draft?.awayPenalties !== undefined ? draft.awayPenalties : (forecast?.awayPenalties !== undefined ? forecast.awayPenalties : undefined)) : undefined;
 
     setDrafts(prev => ({ 
       ...prev, 
@@ -866,7 +867,8 @@ export default function MatchesList({
                                       {(() => {
                                         const rating = getScoreBadge(match, userForecast);
                                         let totalPts = rating.points;
-                                        if (match.phase !== 'group' && match.homeScore === match.awayScore) {
+                                        const userPredictedDraw = userForecast.homeScore === userForecast.awayScore;
+                                        if (match.phase !== 'group' && match.homeScore === match.awayScore && userPredictedDraw) {
                                           const penResult = calculatePenaltyScore(
                                             match.homePenalties,
                                             match.awayPenalties,
@@ -878,7 +880,7 @@ export default function MatchesList({
                                         return (
                                           <>
                                             <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full ${rating.style}`}>{rating.label} (+{totalPts} Pts)</span>
-                                            {match.phase !== 'group' && match.homeScore === match.awayScore && (
+                                            {match.phase !== 'group' && match.homeScore === match.awayScore && userPredictedDraw && (
                                               <div className="text-[10px] text-slate-500 font-medium mt-0.5">
                                                 Penales: {userForecast.homePenalties ?? 0} - {userForecast.awayPenalties ?? 0}
                                                 {(() => {
@@ -988,7 +990,7 @@ export default function MatchesList({
                                             <span className={`inline-block text-[9px] font-bold mt-1 px-1.5 rounded ${pointsResult.badgeColor}`}>
                                               {(() => {
                                                 let pts = pointsResult.points;
-                                                if (match.phase !== 'group' && match.homeScore === match.awayScore) {
+                                                if (match.phase !== 'group' && match.homeScore === match.awayScore && f.homeScore === f.awayScore) {
                                                   const penResult = calculatePenaltyScore(
                                                     match.homePenalties,
                                                     match.awayPenalties,

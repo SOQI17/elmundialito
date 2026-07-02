@@ -360,7 +360,9 @@ export default function App() {
           homeScore: Number(data.homeScore), 
           awayScore: Number(data.awayScore), 
           updatedAt: updatedAtStr,
-          leagueCode: data.leagueCode || undefined
+          leagueCode: data.leagueCode || undefined,
+          homePenalties: data.homePenalties !== undefined && data.homePenalties !== null ? Number(data.homePenalties) : undefined,
+          awayPenalties: data.awayPenalties !== undefined && data.awayPenalties !== null ? Number(data.awayPenalties) : undefined
         });
       });
 
@@ -379,10 +381,28 @@ export default function App() {
                   const st = fData[idx].updatedAt ? new Date(fData[idx].updatedAt).getTime() : 0;
                   const lt = parsed.updatedAt ? new Date(parsed.updatedAt).getTime() : 0;
                   if (lt > st) {
-                    fData[idx] = { matchId, userId: currentUser.id, homeScore: Number(parsed.homeScore), awayScore: Number(parsed.awayScore), updatedAt: parsed.updatedAt, leagueCode };
+                    fData[idx] = { 
+                      matchId, 
+                      userId: currentUser.id, 
+                      homeScore: Number(parsed.homeScore), 
+                      awayScore: Number(parsed.awayScore), 
+                      updatedAt: parsed.updatedAt, 
+                      leagueCode,
+                      homePenalties: parsed.homePenalties !== undefined && parsed.homePenalties !== null ? Number(parsed.homePenalties) : undefined,
+                      awayPenalties: parsed.awayPenalties !== undefined && parsed.awayPenalties !== null ? Number(parsed.awayPenalties) : undefined
+                    };
                   }
                 } else {
-                  fData.push({ matchId, userId: currentUser.id, homeScore: Number(parsed.homeScore), awayScore: Number(parsed.awayScore), updatedAt: parsed.updatedAt, leagueCode });
+                  fData.push({ 
+                    matchId, 
+                    userId: currentUser.id, 
+                    homeScore: Number(parsed.homeScore), 
+                    awayScore: Number(parsed.awayScore), 
+                    updatedAt: parsed.updatedAt, 
+                    leagueCode,
+                    homePenalties: parsed.homePenalties !== undefined && parsed.homePenalties !== null ? Number(parsed.homePenalties) : undefined,
+                    awayPenalties: parsed.awayPenalties !== undefined && parsed.awayPenalties !== null ? Number(parsed.awayPenalties) : undefined
+                  });
                 }
               }
             }
@@ -1088,7 +1108,7 @@ export default function App() {
             else none++;
 
             // Penalties shootout points
-            if (match.phase !== 'group' && match.homeScore === match.awayScore) {
+            if (match.phase !== 'group' && match.homeScore === match.awayScore && f.homeScore === f.awayScore) {
               const penResult = calculatePenaltyScore(
                 match.homePenalties,
                 match.awayPenalties,

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Match, UserProfile, League, LeagueMemberInfo } from '../types';
 import { TEAMS } from '../data';
 import { TOP_SCORERS, TOP_ASSISTERS, getPlayerFlag, PlayerOption } from '../data/players';
-import { Sparkles, Save, Trophy, Loader2, AlertCircle, Lock, CheckCircle2, XCircle } from 'lucide-react';
+import { Sparkles, Save, Trophy, Loader2, AlertCircle, Lock, CheckCircle2, XCircle, ChevronDown, Search } from 'lucide-react';
 import TeamFlag from './TeamFlag';
 
 interface FuturePredictionsProps {
@@ -25,6 +25,15 @@ export default function FuturePredictions({
   const [selectedChampion, setSelectedChampion] = useState<string>(currentUser.predictedChampion || '');
   const [selectedScorer, setSelectedScorer] = useState<string>(currentUser.predictedScorer || '');
   const [selectedAssister, setSelectedAssister] = useState<string>(currentUser.predictedAssister || '');
+
+  const [isChampOpen, setIsChampOpen] = useState(false);
+  const [champSearch, setChampSearch] = useState('');
+  
+  const [isScorerOpen, setIsScorerOpen] = useState(false);
+  const [scorerSearch, setScorerSearch] = useState('');
+  
+  const [isAssisterOpen, setIsAssisterOpen] = useState(false);
+  const [assisterSearch, setAssisterSearch] = useState('');
   
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -187,21 +196,80 @@ export default function FuturePredictions({
               </p>
             </div>
 
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-2 relative">
               <label className="text-[10px] font-bold text-slate-500 uppercase select-none">Elegir País</label>
-              <select
-                disabled={isLocked}
-                value={selectedChampion}
-                onChange={(e) => setSelectedChampion(e.target.value)}
-                className="bg-white border border-slate-200 rounded-lg p-2.5 text-xs font-semibold text-slate-800 focus:outline-none focus:border-indigo-500 cursor-pointer shadow-xs disabled:bg-slate-50 disabled:text-slate-500"
-              >
-                <option value="">-- Seleccionar --</option>
-                {sortedTeams.map(team => (
-                  <option key={team.id} value={team.id}>
-                    {team.flag} {team.name}
-                  </option>
-                ))}
-              </select>
+              
+              <div>
+                <button
+                  type="button"
+                  disabled={isLocked || isBlockedByPayment}
+                  onClick={() => setIsChampOpen(!isChampOpen)}
+                  className="w-full bg-white border border-slate-200 rounded-lg p-2.5 text-xs font-semibold text-slate-800 focus:outline-none focus:border-indigo-500 cursor-pointer shadow-xs disabled:bg-slate-50 disabled:text-slate-500 flex items-center justify-between transition-all select-none"
+                >
+                  <span className="flex items-center gap-1.5 truncate">
+                    {selectedChampion ? (
+                      <>
+                        <TeamFlag team={TEAMS[selectedChampion]} size="sm" />
+                        <span>{TEAMS[selectedChampion].name}</span>
+                      </>
+                    ) : (
+                      <span className="text-slate-400">Seleccionar país...</span>
+                    )}
+                  </span>
+                  <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${isChampOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                {isChampOpen && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setIsChampOpen(false)} />
+                    <div className="absolute left-0 right-0 mt-1.5 bg-white border border-slate-200 rounded-xl shadow-lg z-20 max-h-60 overflow-y-auto animate-fadeIn flex flex-col p-1.5">
+                      <div className="flex items-center gap-1.5 border border-slate-100 rounded-lg px-2.5 py-1.5 bg-slate-50/50 mb-1.5">
+                        <Search className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <input
+                          type="text"
+                          placeholder="Buscar país..."
+                          value={champSearch}
+                          onChange={(e) => setChampSearch(e.target.value)}
+                          className="bg-transparent border-none text-xs text-slate-700 outline-none w-full placeholder-slate-400"
+                        />
+                      </div>
+
+                      <div className="overflow-y-auto max-h-48 space-y-0.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedChampion('');
+                            setChampSearch('');
+                            setIsChampOpen(false);
+                          }}
+                          className="w-full text-left px-2.5 py-2 text-xs font-semibold rounded-lg hover:bg-slate-50 text-slate-400 transition-colors"
+                        >
+                          -- Limpiar Selección --
+                        </button>
+                        {sortedTeams
+                          .filter(t => t.name.toLowerCase().includes(champSearch.toLowerCase()))
+                          .map(team => (
+                            <button
+                              key={team.id}
+                              type="button"
+                              onClick={() => {
+                                setSelectedChampion(team.id);
+                                setChampSearch('');
+                                setIsChampOpen(false);
+                              }}
+                              className={`w-full text-left px-2.5 py-2 text-xs font-semibold rounded-lg hover:bg-indigo-50 flex items-center gap-2 transition-all ${
+                                selectedChampion === team.id ? 'bg-indigo-50 text-indigo-700 font-extrabold' : 'text-slate-700 hover:text-indigo-650'
+                              }`}
+                            >
+                              <TeamFlag team={team} size="sm" />
+                              <span>{team.name}</span>
+                            </button>
+                          ))}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           </div>
 
@@ -247,21 +315,91 @@ export default function FuturePredictions({
               </p>
             </div>
 
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-2 relative">
               <label className="text-[10px] font-bold text-slate-500 uppercase select-none">Elegir Goleador</label>
-              <select
-                disabled={isLocked}
-                value={selectedScorer}
-                onChange={(e) => setSelectedScorer(e.target.value)}
-                className="bg-white border border-slate-200 rounded-lg p-2.5 text-xs font-semibold text-slate-800 focus:outline-none focus:border-indigo-500 cursor-pointer shadow-xs disabled:bg-slate-50 disabled:text-slate-500"
-              >
-                <option value="">-- Seleccionar --</option>
-                {TOP_SCORERS.map((player) => (
-                  <option key={player.name} value={player.name}>
-                    {getPlayerFlag(player.team)} {player.name} ({player.team})
-                  </option>
-                ))}
-              </select>
+              
+              <div>
+                <button
+                  type="button"
+                  disabled={isLocked || isBlockedByPayment}
+                  onClick={() => setIsScorerOpen(!isScorerOpen)}
+                  className="w-full bg-white border border-slate-200 rounded-lg p-2.5 text-xs font-semibold text-slate-800 focus:outline-none focus:border-indigo-500 cursor-pointer shadow-xs disabled:bg-slate-50 disabled:text-slate-500 flex items-center justify-between transition-all select-none"
+                >
+                  <span className="flex items-center gap-1.5 truncate">
+                    {selectedScorer ? (
+                      <>
+                        <span className="text-sm shrink-0">
+                          {(() => {
+                            const pl = TOP_SCORERS.find(p => p.name === selectedScorer);
+                            return pl ? getPlayerFlag(pl.team) : '⚽';
+                          })()}
+                        </span>
+                        <span>
+                          {selectedScorer}
+                          {(() => {
+                            const pl = TOP_SCORERS.find(p => p.name === selectedScorer);
+                            return pl ? ` (${pl.team})` : '';
+                          })()}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="text-slate-400">Seleccionar goleador...</span>
+                    )}
+                  </span>
+                  <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${isScorerOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                {isScorerOpen && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setIsScorerOpen(false)} />
+                    <div className="absolute left-0 right-0 mt-1.5 bg-white border border-slate-200 rounded-xl shadow-lg z-20 max-h-60 overflow-y-auto animate-fadeIn flex flex-col p-1.5">
+                      <div className="flex items-center gap-1.5 border border-slate-100 rounded-lg px-2.5 py-1.5 bg-slate-50/50 mb-1.5">
+                        <Search className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <input
+                          type="text"
+                          placeholder="Buscar goleador..."
+                          value={scorerSearch}
+                          onChange={(e) => setScorerSearch(e.target.value)}
+                          className="bg-transparent border-none text-xs text-slate-700 outline-none w-full placeholder-slate-400"
+                        />
+                      </div>
+
+                      <div className="overflow-y-auto max-h-48 space-y-0.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedScorer('');
+                            setScorerSearch('');
+                            setIsScorerOpen(false);
+                          }}
+                          className="w-full text-left px-2.5 py-2 text-xs font-semibold rounded-lg hover:bg-slate-50 text-slate-400 transition-colors"
+                        >
+                          -- Limpiar Selección --
+                        </button>
+                        {TOP_SCORERS
+                          .filter(p => p.name.toLowerCase().includes(scorerSearch.toLowerCase()) || p.team.toLowerCase().includes(scorerSearch.toLowerCase()))
+                          .map(player => (
+                            <button
+                              key={player.name}
+                              type="button"
+                              onClick={() => {
+                                setSelectedScorer(player.name);
+                                setScorerSearch('');
+                                setIsScorerOpen(false);
+                              }}
+                              className={`w-full text-left px-2.5 py-2 text-xs font-semibold rounded-lg hover:bg-indigo-50 flex items-center gap-2 transition-all ${
+                                selectedScorer === player.name ? 'bg-indigo-50 text-indigo-700 font-extrabold' : 'text-slate-700 hover:text-indigo-650'
+                              }`}
+                            >
+                              <span className="text-sm shrink-0">{getPlayerFlag(player.team)}</span>
+                              <span>{player.name} <span className="text-slate-400 font-normal">({player.team})</span></span>
+                            </button>
+                          ))}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           </div>
 
@@ -301,21 +439,91 @@ export default function FuturePredictions({
               </p>
             </div>
 
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-2 relative">
               <label className="text-[10px] font-bold text-slate-500 uppercase select-none">Elegir Asistidor</label>
-              <select
-                disabled={isLocked}
-                value={selectedAssister}
-                onChange={(e) => setSelectedAssister(e.target.value)}
-                className="bg-white border border-slate-200 rounded-lg p-2.5 text-xs font-semibold text-slate-800 focus:outline-none focus:border-indigo-500 cursor-pointer shadow-xs disabled:bg-slate-50 disabled:text-slate-500"
-              >
-                <option value="">-- Seleccionar --</option>
-                {TOP_ASSISTERS.map((player) => (
-                  <option key={player.name} value={player.name}>
-                    {getPlayerFlag(player.team)} {player.name} ({player.team})
-                  </option>
-                ))}
-              </select>
+              
+              <div>
+                <button
+                  type="button"
+                  disabled={isLocked || isBlockedByPayment}
+                  onClick={() => setIsAssisterOpen(!isAssisterOpen)}
+                  className="w-full bg-white border border-slate-200 rounded-lg p-2.5 text-xs font-semibold text-slate-800 focus:outline-none focus:border-indigo-500 cursor-pointer shadow-xs disabled:bg-slate-50 disabled:text-slate-500 flex items-center justify-between transition-all select-none"
+                >
+                  <span className="flex items-center gap-1.5 truncate">
+                    {selectedAssister ? (
+                      <>
+                        <span className="text-sm shrink-0">
+                          {(() => {
+                            const pl = TOP_ASSISTERS.find(p => p.name === selectedAssister);
+                            return pl ? getPlayerFlag(pl.team) : '👟';
+                          })()}
+                        </span>
+                        <span>
+                          {selectedAssister}
+                          {(() => {
+                            const pl = TOP_ASSISTERS.find(p => p.name === selectedAssister);
+                            return pl ? ` (${pl.team})` : '';
+                          })()}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="text-slate-400">Seleccionar asistidor...</span>
+                    )}
+                  </span>
+                  <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${isAssisterOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                {isAssisterOpen && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setIsAssisterOpen(false)} />
+                    <div className="absolute left-0 right-0 mt-1.5 bg-white border border-slate-200 rounded-xl shadow-lg z-20 max-h-60 overflow-y-auto animate-fadeIn flex flex-col p-1.5">
+                      <div className="flex items-center gap-1.5 border border-slate-100 rounded-lg px-2.5 py-1.5 bg-slate-50/50 mb-1.5">
+                        <Search className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <input
+                          type="text"
+                          placeholder="Buscar asistidor..."
+                          value={assisterSearch}
+                          onChange={(e) => setAssisterSearch(e.target.value)}
+                          className="bg-transparent border-none text-xs text-slate-700 outline-none w-full placeholder-slate-400"
+                        />
+                      </div>
+
+                      <div className="overflow-y-auto max-h-48 space-y-0.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedAssister('');
+                            setAssisterSearch('');
+                            setIsAssisterOpen(false);
+                          }}
+                          className="w-full text-left px-2.5 py-2 text-xs font-semibold rounded-lg hover:bg-slate-50 text-slate-400 transition-colors"
+                        >
+                          -- Limpiar Selección --
+                        </button>
+                        {TOP_ASSISTERS
+                          .filter(p => p.name.toLowerCase().includes(assisterSearch.toLowerCase()) || p.team.toLowerCase().includes(assisterSearch.toLowerCase()))
+                          .map(player => (
+                            <button
+                              key={player.name}
+                              type="button"
+                              onClick={() => {
+                                setSelectedAssister(player.name);
+                                setAssisterSearch('');
+                                setIsAssisterOpen(false);
+                              }}
+                              className={`w-full text-left px-2.5 py-2 text-xs font-semibold rounded-lg hover:bg-indigo-50 flex items-center gap-2 transition-all ${
+                                selectedAssister === player.name ? 'bg-indigo-50 text-indigo-700 font-extrabold' : 'text-slate-700 hover:text-indigo-650'
+                              }`}
+                            >
+                              <span className="text-sm shrink-0">{getPlayerFlag(player.team)}</span>
+                              <span>{player.name} <span className="text-slate-400 font-normal">({player.team})</span></span>
+                            </button>
+                          ))}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           </div>
 
