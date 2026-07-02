@@ -8,7 +8,7 @@ import TeamFlag from './TeamFlag';
 interface FuturePredictionsProps {
   currentUser: UserProfile;
   matches: Match[];
-  tournamentResults: { realChampion?: string; realScorer?: string; realAssister?: string } | null;
+  tournamentResults: { realChampion?: string; realScorer?: string; realAssister?: string; specialPredictionsLocked?: boolean } | null;
   onSavePredictions: (champion: string, scorer: string, assister: string) => Promise<void>;
   currentLeague?: League | null;
   leagueMembersData?: LeagueMemberInfo[];
