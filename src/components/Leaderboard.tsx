@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { UserStats, UserProfile, Match, Forecast, League, MatchPhase } from '../types';
 import { Trophy, Award, Search, Percent, Medal, BarChart2, Calendar, ChevronDown, ChevronUp, BookOpen, Coins } from 'lucide-react';
 import { calculateScore } from '../utils/scoring';
+import { TEAMS } from '../data';
 import TeamFlag from './TeamFlag';
 
 interface LeaderboardProps {
@@ -13,6 +14,7 @@ interface LeaderboardProps {
   currentLeague?: League | null;
   activePhase?: MatchPhase;
   onChangePhase?: (phase: MatchPhase) => void;
+  tournamentResults?: { realChampion?: string; realScorer?: string; realAssister?: string } | null;
 }
 
 export default function Leaderboard({ 
@@ -23,7 +25,8 @@ export default function Leaderboard({
   users = [],
   currentLeague = null,
   activePhase,
-  onChangePhase
+  onChangePhase,
+  tournamentResults = null
 }: LeaderboardProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeDateFilter, setActiveDateFilter] = useState<string>('all');
@@ -284,6 +287,31 @@ export default function Leaderboard({
         }
       });
 
+      // Extra points for tournament predictions
+      let championPoints = 0;
+      let scorerPoints = 0;
+      let assisterPoints = 0;
+      if (tournamentResults) {
+        if (tournamentResults.realChampion && user.predictedChampion === tournamentResults.realChampion) {
+          championPoints = 5;
+        }
+        if (
+          tournamentResults.realScorer && 
+          user.predictedScorer && 
+          user.predictedScorer.trim().toLowerCase() === tournamentResults.realScorer.trim().toLowerCase()
+        ) {
+          scorerPoints = 5;
+        }
+        if (
+          tournamentResults.realAssister && 
+          user.predictedAssister && 
+          user.predictedAssister.trim().toLowerCase() === tournamentResults.realAssister.trim().toLowerCase()
+        ) {
+          assisterPoints = 5;
+        }
+      }
+      totalPoints += championPoints + scorerPoints + assisterPoints;
+
       return {
         userId: user.id,
         userName: user.name,
@@ -294,7 +322,10 @@ export default function Leaderboard({
         noMatchesCount,
         totalPoints,
         pendingMatchesCount,
-        predictionsMadeCount
+        predictionsMadeCount,
+        championPoints,
+        scorerPoints,
+        assisterPoints
       };
     });
 
@@ -726,6 +757,28 @@ export default function Leaderboard({
                     <span title="Acierto Simple (1pt)" className="text-blue-600">⚽ {userStat.simpleMatchesCount}</span>
                   </div>
 
+                  {((userStat.championPoints !== undefined && userStat.championPoints > 0) || 
+                    (userStat.scorerPoints !== undefined && userStat.scorerPoints > 0) || 
+                    (userStat.assisterPoints !== undefined && userStat.assisterPoints > 0)) && (
+                    <div className="flex flex-wrap justify-center gap-1 mt-1 text-[9px] font-bold">
+                      {userStat.championPoints !== undefined && userStat.championPoints > 0 && (
+                        <span className="px-1.5 py-0.5 bg-amber-100 text-amber-800 rounded border border-amber-200" title="Acertó Campeón (+5 pts)">
+                          🏆 +5 Camp.
+                        </span>
+                      )}
+                      {userStat.scorerPoints !== undefined && userStat.scorerPoints > 0 && (
+                        <span className="px-1.5 py-0.5 bg-rose-100 text-rose-800 rounded border border-rose-200" title="Acertó Goleador (+5 pts)">
+                          ⚽ +5 Gol.
+                        </span>
+                      )}
+                      {userStat.assisterPoints !== undefined && userStat.assisterPoints > 0 && (
+                        <span className="px-1.5 py-0.5 bg-sky-100 text-sky-850 rounded border border-sky-200" title="Acertó Asistidor (+5 pts)">
+                          👟 +5 Asist.
+                        </span>
+                      )}
+                    </div>
+                  )}
+
                   {userStat.predictionsMadeCount !== undefined && (
                     <div className="pt-1.5 border-t border-slate-100 flex flex-col items-center justify-center gap-0.5">
                       <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Apuestas Registradas</span>
@@ -921,11 +974,34 @@ export default function Leaderboard({
                         <div className="flex items-center gap-2">
                           <span className="text-xl">{userStat.userAvatar}</span>
                           <div>
-                            <span className="font-bold text-slate-900">{userStat.userName}</span>
-                            {isCurrentUserRow && (
-                              <span className="ml-1.5 px-1.5 py-0.5 bg-indigo-100 text-indigo-800 text-[9px] font-bold rounded">
-                                Tú
-                              </span>
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-bold text-slate-900">{userStat.userName}</span>
+                              {isCurrentUserRow && (
+                                <span className="px-1.5 py-0.5 bg-indigo-100 text-indigo-800 text-[9px] font-bold rounded">
+                                  Tú
+                                </span>
+                              )}
+                            </div>
+                            {((userStat.championPoints !== undefined && userStat.championPoints > 0) || 
+                              (userStat.scorerPoints !== undefined && userStat.scorerPoints > 0) || 
+                              (userStat.assisterPoints !== undefined && userStat.assisterPoints > 0)) && (
+                              <div className="flex gap-1.5 mt-1 text-[8px] font-extrabold uppercase select-none leading-none">
+                                {userStat.championPoints !== undefined && userStat.championPoints > 0 && (
+                                  <span className="px-1.5 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded" title="Acertó Campeón del Mundo (+5 pts)">
+                                    🏆 +5 Camp.
+                                  </span>
+                                )}
+                                {userStat.scorerPoints !== undefined && userStat.scorerPoints > 0 && (
+                                  <span className="px-1.5 py-0.5 bg-rose-50 text-rose-700 border border-rose-200 rounded" title="Acertó Goleador del Torneo (+5 pts)">
+                                    ⚽ +5 Gol.
+                                  </span>
+                                )}
+                                {userStat.assisterPoints !== undefined && userStat.assisterPoints > 0 && (
+                                  <span className="px-1.5 py-0.5 bg-sky-50 text-sky-750 text-sky-700 border border-sky-200 rounded" title="Acertó Asistidor del Torneo (+5 pts)">
+                                    👟 +5 Asist.
+                                  </span>
+                                )}
+                              </div>
                             )}
                           </div>
                         </div>
@@ -1044,6 +1120,45 @@ export default function Leaderboard({
                                   );
                                 });
                               })()}
+                            </div>
+
+                            {/* Predictions details summary */}
+                            <div className="border-t border-slate-100 pt-3.5 mt-3 flex flex-col gap-2 select-none">
+                              <span className="text-[10px] font-black uppercase text-indigo-700 tracking-wider">
+                                🔮 Pronósticos Especiales del Torneo
+                              </span>
+                              <div className="flex flex-wrap gap-2 text-xs">
+                                {(() => {
+                                  const targetUser = users.find(u => u.id === userStat.userId) || (userStat.userId === currentUser.id ? currentUser : null);
+                                  const champId = targetUser?.predictedChampion;
+                                  const scorer = targetUser?.predictedScorer;
+                                  const assister = targetUser?.predictedAssister;
+                                  const champTeam = champId ? TEAMS[champId] : null;
+
+                                  return (
+                                    <>
+                                      <div className="flex items-center gap-1 px-2.5 py-1 bg-slate-50 text-slate-700 text-[10px] font-bold rounded-lg border border-slate-200">
+                                        <span>Campeón: <strong>{champTeam ? `${champTeam.flag} ${champTeam.name}` : 'Pendiente'}</strong></span>
+                                        {userStat.championPoints !== undefined && userStat.championPoints > 0 && (
+                                          <span className="text-emerald-600 font-extrabold ml-1">(+5 Pts)</span>
+                                        )}
+                                      </div>
+                                      <div className="flex items-center gap-1 px-2.5 py-1 bg-slate-50 text-slate-700 text-[10px] font-bold rounded-lg border border-slate-200">
+                                        <span>Goleador: <strong>{scorer ? scorer : 'Pendiente'}</strong></span>
+                                        {userStat.scorerPoints !== undefined && userStat.scorerPoints > 0 && (
+                                          <span className="text-emerald-600 font-extrabold ml-1">(+5 Pts)</span>
+                                        )}
+                                      </div>
+                                      <div className="flex items-center gap-1 px-2.5 py-1 bg-slate-50 text-slate-700 text-[10px] font-bold rounded-lg border border-slate-200">
+                                        <span>Asistidor: <strong>{assister ? assister : 'Pendiente'}</strong></span>
+                                        {userStat.assisterPoints !== undefined && userStat.assisterPoints > 0 && (
+                                          <span className="text-emerald-600 font-extrabold ml-1">(+5 Pts)</span>
+                                        )}
+                                      </div>
+                                    </>
+                                  );
+                                })()}
+                              </div>
                             </div>
                           </div>
                         </td>

@@ -86,6 +86,9 @@ export interface UserProfile {
   isOfflineFallback?: boolean;
   onboarded?: boolean; // false = mostrar onboarding al primer ingreso
   email?: string;
+  predictedChampion?: string;
+  predictedScorer?: string;
+  predictedAssister?: string;
 }
 
 export interface UserStats {
@@ -99,6 +102,9 @@ export interface UserStats {
   totalPoints: number;
   pendingMatchesCount?: number;
   predictionsMadeCount?: number;
+  championPoints?: number;
+  scorerPoints?: number;
+  assisterPoints?: number;
 }
 
 export interface ScoringResult {

@@ -3,6 +3,7 @@ import { Match, MatchPhase, League, LeagueMemberInfo, UserProfile, Team } from '
 import { Settings, Save, RefreshCw, AlertTriangle, Play, CheckCircle, Globe, Wifi, Check, Sparkles, Loader2, Link2, AlertCircle, Trash2, Edit3, Users } from 'lucide-react';
 import TeamFlag from './TeamFlag';
 import { TEAMS } from '../data';
+import { TOP_SCORERS, TOP_ASSISTERS } from '../data/players';
 
 const PHASES_LABELS: Record<MatchPhase, string> = {
   group: 'Fase de Grupos',
@@ -40,6 +41,8 @@ interface AdminPanelProps {
   currentLeague?: League | null;
   onSaveUserForecast?: (userId: string, matchId: string, homeScore: number, awayScore: number, leagueCode?: string) => Promise<void>;
   onSyncMatchesFromAPI?: () => Promise<{ success: boolean; message: string; updatedCount: number }>;
+  onSaveTournamentResults?: (champion: string, scorer: string, assister: string) => Promise<void>;
+  tournamentResults?: { realChampion?: string; realScorer?: string; realAssister?: string } | null;
 }
 
 export default function AdminPanel({
@@ -56,12 +59,29 @@ export default function AdminPanel({
   onRejectPayment,
   currentLeague = null,
   onSaveUserForecast,
-  onSyncMatchesFromAPI
+  onSyncMatchesFromAPI,
+  onSaveTournamentResults,
+  tournamentResults
 }: AdminPanelProps) {
   const [editingScores, setEditingScores] = useState<Record<string, { home: number; away: number; status: Match['status']; minute?: number }>>({});
   const [editingTeams, setEditingTeams] = useState<Record<string, { homeId?: string; awayId?: string }>>({});
   const [activePhaseFilter, setActivePhaseFilter] = useState<MatchPhase>('group');
   const [activeDateFilter, setActiveDateFilter] = useState<string>('all');
+
+  const [adminChampion, setAdminChampion] = useState<string>(tournamentResults?.realChampion || '');
+  const [adminScorer, setAdminScorer] = useState<string>(tournamentResults?.realScorer || '');
+  const [adminAssister, setAdminAssister] = useState<string>(tournamentResults?.realAssister || '');
+  const [isSavingResults, setIsSavingResults] = useState(false);
+  const [saveResultsSuccess, setSaveResultsSuccess] = useState(false);
+  const [saveResultsError, setSaveResultsError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (tournamentResults) {
+      setAdminChampion(tournamentResults.realChampion || '');
+      setAdminScorer(tournamentResults.realScorer || '');
+      setAdminAssister(tournamentResults.realAssister || '');
+    }
+  }, [tournamentResults]);
 
   const getLocalDateStr = (dateStr: string) => {
     const d = new Date(dateStr);
@@ -923,6 +943,114 @@ export default function AdminPanel({
           </div>
         </div>
       )}
+
+      {/* Tournament Outcomes Admin Card */}
+      <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-4 shadow-sm" id="admin-tournament-outcomes">
+        <div className="border-b border-slate-150 pb-2 flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-bold text-slate-800 font-sans uppercase tracking-wider flex items-center gap-1.5">
+              🏆 Resultados Finales del Torneo (Clasificación Especial)
+            </h3>
+            <p className="text-[10px] text-slate-500 mt-0.5">Establece el Campeón, Goleador y Asistidor del torneo para sumar los +5 puntos correspondientes a los usuarios.</p>
+          </div>
+          <span className="px-2 py-0.5 bg-indigo-50 border border-indigo-150 text-indigo-700 text-[9px] font-black uppercase rounded select-none">
+            +15 Puntos Máx
+          </span>
+        </div>
+
+        {saveResultsSuccess && (
+          <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 font-bold animate-fadeIn">
+            ✓ ¡Resultados guardados con éxito! Los puntajes de la clasificación se han recalculado automáticamente.
+          </div>
+        )}
+
+        {saveResultsError && (
+          <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 font-bold animate-fadeIn">
+            ⚠️ {saveResultsError}
+          </div>
+        )}
+
+        <form onSubmit={async (e) => {
+          e.preventDefault();
+          if (!onSaveTournamentResults) return;
+          setIsSavingResults(true);
+          setSaveResultsSuccess(false);
+          setSaveResultsError(null);
+          try {
+            await onSaveTournamentResults(adminChampion, adminScorer, adminAssister);
+            setSaveResultsSuccess(true);
+            setTimeout(() => setSaveResultsSuccess(false), 4000);
+          } catch (err: any) {
+            console.error(err);
+            setSaveResultsError(err.message || 'No se pudieron guardar los resultados finales del torneo.');
+          } finally {
+            setIsSavingResults(false);
+          }
+        }} className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[10px] font-bold text-slate-500 uppercase select-none">Campeón Oficial</label>
+            <select
+              value={adminChampion}
+              onChange={(e) => setAdminChampion(e.target.value)}
+              className="bg-white border border-slate-200 rounded-lg p-2.5 text-xs font-semibold text-slate-800 focus:outline-none focus:border-indigo-500 cursor-pointer shadow-xs"
+            >
+              <option value="">-- Seleccionar campeón --</option>
+              {Object.values(TEAMS).sort((a, b) => a.name.localeCompare(b.name)).map(team => (
+                <option key={team.id} value={team.id}>
+                  {team.flag} {team.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[10px] font-bold text-slate-500 uppercase select-none">Goleador Oficial</label>
+            <select
+              value={adminScorer}
+              onChange={(e) => setAdminScorer(e.target.value)}
+              className="bg-white border border-slate-200 rounded-lg p-2.5 text-xs font-semibold text-slate-800 focus:outline-none focus:border-indigo-500 cursor-pointer shadow-xs"
+            >
+              <option value="">-- Seleccionar goleador --</option>
+              {TOP_SCORERS.map(player => (
+                <option key={player.name} value={player.name}>
+                  {player.name} ({player.team})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[10px] font-bold text-slate-500 uppercase select-none">Asistidor Oficial</label>
+            <select
+              value={adminAssister}
+              onChange={(e) => setAdminAssister(e.target.value)}
+              className="bg-white border border-slate-200 rounded-lg p-2.5 text-xs font-semibold text-slate-800 focus:outline-none focus:border-indigo-500 cursor-pointer shadow-xs"
+            >
+              <option value="">-- Seleccionar asistidor --</option>
+              {TOP_ASSISTERS.map(player => (
+                <option key={player.name} value={player.name}>
+                  {player.name} ({player.team})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="md:col-span-3 flex justify-end">
+            <button
+              type="submit"
+              disabled={isSavingResults}
+              className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-xs transition-all active:scale-98 cursor-pointer disabled:opacity-50 select-none"
+            >
+              {isSavingResults ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Save className="w-3.5 h-3.5" />
+              )}
+              <span>Guardar Resultados Especiales</span>
+            </button>
+          </div>
+        </form>
+      </div>
 
       {/* Matches editor list */}
       <div className="space-y-6" id="admin-matches-editor">

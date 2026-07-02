@@ -8,7 +8,7 @@ import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { db, auth, handleFirestoreError, OperationType, functions } from './firebase';
 import { httpsCallable } from 'firebase/functions';
 
-import { Trophy, Calendar, Settings, Lightbulb, BookOpen, Users, LogOut, Pencil, Globe } from 'lucide-react';
+import { Trophy, Calendar, Settings, Lightbulb, BookOpen, Users, LogOut, Pencil, Globe, Sparkles } from 'lucide-react';
 
 import LeagueSelector from './components/LeagueSelector';
 import MatchesList from './components/MatchesList';
@@ -20,6 +20,7 @@ import EditProfileModal from './components/Editprofilemodal';
 import OnboardingScreen from './components/Onboardingscreen';
 import ForceBootstrap from './components/Forcebootstrap';
 import WorldStandings from './components/WorldStandings';
+import FuturePredictions from './components/FuturePredictions';
 
 
 
@@ -32,7 +33,7 @@ const isAdminEmail = (email: string | null | undefined): boolean => {
 };
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'leagues' | 'calendar' | 'leaderboard' | 'sandbox' | 'world-standings' | 'admin'>('calendar');
+  const [activeTab, setActiveTab] = useState<'calendar' | 'special-predictions' | 'leaderboard' | 'leagues' | 'sandbox' | 'world-standings' | 'admin'>('calendar');
   const [showForceBootstrap, setShowForceBootstrap] = useState(false);
 
   // Auth
@@ -309,13 +310,33 @@ export default function App() {
         if (snapshot.empty) return;
       }
       const mData: Match[] = [];
-      snapshot.forEach((d) => mData.push({ id: d.id, ...d.data() } as Match));
+      snapshot.forEach((d) => {
+        if (d.id !== 'tournament_results') {
+          mData.push({ id: d.id, ...d.data() } as Match);
+        }
+      });
       mData.sort((a, b) => new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime());
       setMatches(mData);
     }, (err) => {
       console.warn('Matches sync offline:', err);
       setOfflineModeActive(true);
       setMatches(prev => prev.length === 0 ? INITIAL_MATCHES : prev);
+    });
+    return () => unsubscribe();
+  }, [authUser]);
+
+  const [tournamentResults, setTournamentResults] = useState<{ realChampion?: string; realScorer?: string; realAssister?: string } | null>(null);
+
+  useEffect(() => {
+    if (!authUser) return;
+    const unsubscribe = onSnapshot(doc(db, 'matches', 'tournament_results'), (docSnap) => {
+      if (docSnap.exists()) {
+        setTournamentResults(docSnap.data() as any);
+      } else {
+        setTournamentResults({});
+      }
+    }, (err) => {
+      console.warn('Tournament results sync offline:', err);
     });
     return () => unsubscribe();
   }, [authUser]);
@@ -758,6 +779,36 @@ export default function App() {
     }
   };
 
+  const handleSaveTournamentPredictions = async (champion: string, scorer: string, assister: string) => {
+    if (!authUser) return;
+    try {
+      await setDoc(doc(db, 'users', authUser.uid), {
+        predictedChampion: champion,
+        predictedScorer: scorer,
+        predictedAssister: assister
+      }, { merge: true });
+    } catch (err: any) {
+      console.error("Error saving predictions:", err);
+      handleFirestoreError(err, OperationType.WRITE, `users/${authUser.uid}`);
+      throw err;
+    }
+  };
+
+  const handleSaveTournamentResults = async (champion: string, scorer: string, assister: string) => {
+    if (!authUser || !isRealAdmin) return;
+    try {
+      await setDoc(doc(db, 'matches', 'tournament_results'), {
+        realChampion: champion,
+        realScorer: scorer,
+        realAssister: assister
+      }, { merge: true });
+    } catch (err: any) {
+      console.error("Error saving tournament results:", err);
+      handleFirestoreError(err, OperationType.WRITE, 'matches/tournament_results');
+      throw err;
+    }
+  };
+
   const handleResetData = async () => {
     try {
       for (const m of matches) await setDoc(doc(db, 'matches', m.id), { homeScore: undefined, awayScore: undefined, status: 'scheduled' }, { merge: true });
@@ -1001,7 +1052,46 @@ export default function App() {
           if (f) pending++;
         }
       });
-      return { userId: user.id, userName: user.name, userAvatar: user.avatar, exactMatchesCount: exact, trendMatchesCount: trend, simpleMatchesCount: simple, noMatchesCount: none, totalPoints: total, pendingMatchesCount: pending };
+
+      // Extra points for tournament predictions
+      let championPoints = 0;
+      let scorerPoints = 0;
+      let assisterPoints = 0;
+      if (tournamentResults) {
+        if (tournamentResults.realChampion && user.predictedChampion === tournamentResults.realChampion) {
+          championPoints = 5;
+        }
+        if (
+          tournamentResults.realScorer && 
+          user.predictedScorer && 
+          user.predictedScorer.trim().toLowerCase() === tournamentResults.realScorer.trim().toLowerCase()
+        ) {
+          scorerPoints = 5;
+        }
+        if (
+          tournamentResults.realAssister && 
+          user.predictedAssister && 
+          user.predictedAssister.trim().toLowerCase() === tournamentResults.realAssister.trim().toLowerCase()
+        ) {
+          assisterPoints = 5;
+        }
+      }
+      total += championPoints + scorerPoints + assisterPoints;
+
+      return { 
+        userId: user.id, 
+        userName: user.name, 
+        userAvatar: user.avatar, 
+        exactMatchesCount: exact, 
+        trendMatchesCount: trend, 
+        simpleMatchesCount: simple, 
+        noMatchesCount: none, 
+        totalPoints: total, 
+        pendingMatchesCount: pending,
+        championPoints,
+        scorerPoints,
+        assisterPoints
+      };
     }).sort((a, b) => b.totalPoints - a.totalPoints || b.exactMatchesCount - a.exactMatchesCount || b.trendMatchesCount - a.trendMatchesCount);
   };
   
@@ -1117,6 +1207,7 @@ export default function App() {
           <nav className="flex flex-wrap gap-1 bg-slate-850 p-1.5 rounded-xl border border-slate-800">
             {[
               { id: 'calendar', label: 'Partidos', icon: <Calendar className="w-4 h-4" /> },
+              { id: 'special-predictions', label: 'Futuros', icon: <Sparkles className="w-4 h-4 text-indigo-400" /> },
               { id: 'leaderboard', label: 'Clasificación', icon: <Trophy className="w-4 h-4" /> },
               { id: 'leagues', label: 'Mi Cuenta / Ligas', icon: <Users className="w-4 h-4" /> },
               { id: 'world-standings', label: 'Tabla Mundial', icon: <Globe className="w-4 h-4" /> },
@@ -1245,6 +1336,36 @@ export default function App() {
       {/* Main */}
       <main className="grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
         <div className="space-y-8">
+          {activeTab === 'special-predictions' && (
+            currentLeague ? (
+              <FuturePredictions
+                currentUser={currentUserWithAdminFlag!}
+                matches={matches}
+                tournamentResults={tournamentResults}
+                onSavePredictions={handleSaveTournamentPredictions}
+                currentLeague={enrichedCurrentLeague}
+                leagueMembersData={currentLeagueMembersData}
+              />
+            ) : (
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-8 text-center max-w-xl mx-auto space-y-4 my-8 animate-fadeIn">
+                <div className="w-16 h-16 bg-amber-50 border border-amber-200 text-amber-500 rounded-2xl flex items-center justify-center mx-auto text-3xl select-none animate-bounce">
+                  ⚠️
+                </div>
+                <h2 className="text-xl font-bold text-slate-800 font-sans">No tienes ligas activas</h2>
+                <p className="text-xs text-slate-500 leading-relaxed font-sans max-w-md mx-auto">
+                  Para poder registrar tus pronósticos futuros (Campeón, Goleador, Asistidor), necesitas ser miembro de al menos una liga activa.
+                </p>
+                <div className="pt-2">
+                  <button
+                    onClick={() => setActiveTab('leagues')}
+                    className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-md hover:shadow-lg cursor-pointer"
+                  >
+                    Ir a Mi Cuenta / Ligas
+                  </button>
+                </div>
+              </div>
+            )
+          )}
           {activeTab === 'calendar' && (
             currentLeague ? (
               <MatchesList
@@ -1343,6 +1464,8 @@ export default function App() {
               currentLeague={enrichedCurrentLeague}
               onSaveUserForecast={handleSaveUserForecast}
               onSyncMatchesFromAPI={handleSyncMatchesFromAPI}
+              onSaveTournamentResults={handleSaveTournamentResults}
+              tournamentResults={tournamentResults}
             />
           )}
         </div>
