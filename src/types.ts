@@ -23,6 +23,8 @@ export interface Match {
   phase: MatchPhase;
   homeScore?: number; // Real home team score (undefined if not played yet)
   awayScore?: number; // Real away team score (undefined if not played yet)
+  homePenalties?: number;
+  awayPenalties?: number;
   status: 'scheduled' | 'live' | 'finished';
   liveStartTimestamp?: number; // UNIX timestamp when game started in real-time
   mode?: 'simulated' | 'realtime'; // game live mode selector
@@ -34,6 +36,8 @@ export interface Forecast {
   userId: string;
   homeScore: number;
   awayScore: number;
+  homePenalties?: number;
+  awayPenalties?: number;
   updatedAt: string;
   leagueCode?: string;
 }

@@ -87,3 +87,49 @@ export function calculateScore(
     reason: `Acertaste la victoria del ${winnerTeamName}, pero con diferente marcador y diferencia.`
   };
 }
+
+export function calculatePenaltyScore(
+  realHomePens: number | undefined | null,
+  realAwayPens: number | undefined | null,
+  predHomePens: number | undefined | null,
+  predAwayPens: number | undefined | null
+): { score: number; category: 'perfect' | 'simple' | 'none'; reason: string } {
+  if (
+    realHomePens === undefined || realHomePens === null ||
+    realAwayPens === undefined || realAwayPens === null ||
+    predHomePens === undefined || predHomePens === null ||
+    predAwayPens === undefined || predAwayPens === null
+  ) {
+    return { score: 0, category: 'none', reason: '' };
+  }
+
+  // Exact Match (+3 pts)
+  if (realHomePens === predHomePens && realAwayPens === predAwayPens) {
+    return {
+      score: 3,
+      category: 'perfect',
+      reason: 'Acierto Perfecto de Penales'
+    };
+  }
+
+  // Winner Match (+1 pt)
+  const realDiff = realHomePens - realAwayPens;
+  const predDiff = predHomePens - predAwayPens;
+
+  const realWinner = realDiff > 0 ? 'Home' : 'Away';
+  const predWinner = predDiff > 0 ? 'Home' : 'Away';
+
+  if (realWinner === predWinner) {
+    return {
+      score: 1,
+      category: 'simple',
+      reason: 'Acierto Ganador de Penales'
+    };
+  }
+
+  return {
+    score: 0,
+    category: 'none',
+    reason: 'No acertaste los penales'
+  };
+}

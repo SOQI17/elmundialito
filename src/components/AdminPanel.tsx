@@ -27,7 +27,9 @@ interface AdminPanelProps {
     liveStartTimestamp?: number | null,
     incidents?: Match['incidents'],
     homeTeam?: Team,
-    awayTeam?: Team
+    awayTeam?: Team,
+    homePenalties?: number | null,
+    awayPenalties?: number | null
   ) => void;
   onResetAllData: () => void;
   onTriggerBootstrap?: () => void;
@@ -42,7 +44,8 @@ interface AdminPanelProps {
   onSaveUserForecast?: (userId: string, matchId: string, homeScore: number, awayScore: number, leagueCode?: string) => Promise<void>;
   onSyncMatchesFromAPI?: () => Promise<{ success: boolean; message: string; updatedCount: number }>;
   onSaveTournamentResults?: (champion: string, scorer: string, assister: string) => Promise<void>;
-  tournamentResults?: { realChampion?: string; realScorer?: string; realAssister?: string } | null;
+  onSaveTournamentLockStatus?: (locked: boolean) => Promise<void>;
+  tournamentResults?: { realChampion?: string; realScorer?: string; realAssister?: string; specialPredictionsLocked?: boolean } | null;
 }
 
 export default function AdminPanel({
@@ -61,16 +64,25 @@ export default function AdminPanel({
   onSaveUserForecast,
   onSyncMatchesFromAPI,
   onSaveTournamentResults,
+  onSaveTournamentLockStatus,
   tournamentResults
 }: AdminPanelProps) {
   const [editingScores, setEditingScores] = useState<Record<string, { home: number; away: number; status: Match['status']; minute?: number }>>({});
   const [editingTeams, setEditingTeams] = useState<Record<string, { homeId?: string; awayId?: string }>>({});
+  const [editingPenalties, setEditingPenalties] = useState<Record<string, { home: number; away: number }>>({});
   const [activePhaseFilter, setActivePhaseFilter] = useState<MatchPhase>('group');
   const [activeDateFilter, setActiveDateFilter] = useState<string>('all');
 
   const [adminChampion, setAdminChampion] = useState<string>(tournamentResults?.realChampion || '');
   const [adminScorer, setAdminScorer] = useState<string>(tournamentResults?.realScorer || '');
   const [adminAssister, setAdminAssister] = useState<string>(tournamentResults?.realAssister || '');
+  const [specialPredictionsLocked, setSpecialPredictionsLocked] = useState(!!tournamentResults?.specialPredictionsLocked);
+  
+  useEffect(() => {
+    if (tournamentResults) {
+      setSpecialPredictionsLocked(!!tournamentResults.specialPredictionsLocked);
+    }
+  }, [tournamentResults]);
   const [isSavingResults, setIsSavingResults] = useState(false);
   const [saveResultsSuccess, setSaveResultsSuccess] = useState(false);
   const [saveResultsError, setSaveResultsError] = useState<string | null>(null);
@@ -386,43 +398,76 @@ export default function AdminPanel({
     });
   };
 
+  const handlePenaltyScoreChange = (matchId: string, team: 'home' | 'away', val: string) => {
+    const num = val === '' ? 0 : Math.max(0, parseInt(val) || 0);
+    setEditingPenalties(prev => {
+      const current = prev[matchId] || { home: 0, away: 0 };
+      return {
+        ...prev,
+        [matchId]: {
+          ...current,
+          [team]: num
+        }
+      };
+    });
+  };
+
   const handleSaveResult = async (matchId: string, currentMatch: Match) => {
     const edit = editingScores[matchId];
     const teamEdit = editingTeams[matchId];
+    const penaltyEdit = editingPenalties[matchId];
     try {
       const homeTeam = teamEdit?.homeId ? TEAMS[teamEdit.homeId] : undefined;
       const awayTeam = teamEdit?.awayId ? TEAMS[teamEdit.awayId] : undefined;
 
-      if (edit) {
-        // Si el estado es live y se especificó/editó el minuto, calcular liveStartTimestamp
-        let calculatedTimestamp: number | null = null;
-        if (edit.status === 'live') {
-          const currentMinute = edit.minute !== undefined 
-            ? edit.minute 
-            : (currentMatch.liveStartTimestamp 
-              ? Math.max(0, Math.floor((Date.now() - currentMatch.liveStartTimestamp) / 60000))
-              : (Math.floor((Date.now() - new Date(currentMatch.dateTime).getTime()) / 60000) > 0 
-                ? Math.floor((Date.now() - new Date(currentMatch.dateTime).getTime()) / 60000) 
-                : 0));
-          calculatedTimestamp = Date.now() - (currentMinute * 60000);
+      const homeScore = edit !== undefined ? edit.home : (currentMatch.homeScore !== undefined ? currentMatch.homeScore : 0);
+      const awayScore = edit !== undefined ? edit.away : (currentMatch.awayScore !== undefined ? currentMatch.awayScore : 0);
+      const status = edit !== undefined ? edit.status : currentMatch.status;
+
+      const isDraw = homeScore === awayScore;
+      const isKnockout = currentMatch.phase !== 'group';
+
+      let homePens: number | null = null;
+      let awayPens: number | null = null;
+
+      if (isKnockout && isDraw) {
+        homePens = penaltyEdit !== undefined ? penaltyEdit.home : (currentMatch.homePenalties !== undefined ? currentMatch.homePenalties : 0);
+        awayPens = penaltyEdit !== undefined ? penaltyEdit.away : (currentMatch.awayPenalties !== undefined ? currentMatch.awayPenalties : 0);
+        if (homePens === awayPens && status === 'finished') {
+          alert("Error: Las tandas de penales deben tener un ganador (el marcador no puede quedar empatado).");
+          return;
         }
-        await onUpdateMatchResult(matchId, edit.home, edit.away, edit.status, undefined, calculatedTimestamp, undefined, homeTeam, awayTeam);
-      } else {
-        // Si no ha editado valores directamente pero hace clic, guardar con actuales
-        await onUpdateMatchResult(
-          matchId, 
-          currentMatch.homeScore !== undefined ? currentMatch.homeScore : 0, 
-          currentMatch.awayScore !== undefined ? currentMatch.awayScore : 0, 
-          currentMatch.status,
-          undefined,
-          null,
-          undefined,
-          homeTeam,
-          awayTeam
-        );
       }
+
+      // Si el estado es live y se especificó/editó el minuto, calcular liveStartTimestamp
+      let calculatedTimestamp: number | null = null;
+      if (edit && edit.status === 'live') {
+        const currentMinute = edit.minute !== undefined 
+          ? edit.minute 
+          : (currentMatch.liveStartTimestamp 
+            ? Math.max(0, Math.floor((Date.now() - currentMatch.liveStartTimestamp) / 60000))
+            : (Math.floor((Date.now() - new Date(currentMatch.dateTime).getTime()) / 60000) > 0 
+              ? Math.floor((Date.now() - new Date(currentMatch.dateTime).getTime()) / 60000) 
+              : 0));
+        calculatedTimestamp = Date.now() - (currentMinute * 60000);
+      } else if (currentMatch.status === 'live') {
+        calculatedTimestamp = currentMatch.liveStartTimestamp || null;
+      }
+
+      await onUpdateMatchResult(
+        matchId,
+        homeScore,
+        awayScore,
+        status,
+        undefined,
+        calculatedTimestamp,
+        undefined,
+        homeTeam,
+        awayTeam,
+        homePens,
+        awayPens
+      );
       
-      // Quitar del estado local de edición activa para confirmar cambios visuales solo si tiene éxito
       const copy = { ...editingScores };
       delete copy[matchId];
       setEditingScores(copy);
@@ -430,6 +475,10 @@ export default function AdminPanel({
       const copyTeams = { ...editingTeams };
       delete copyTeams[matchId];
       setEditingTeams(copyTeams);
+
+      const copyPens = { ...editingPenalties };
+      delete copyPens[matchId];
+      setEditingPenalties(copyPens);
     } catch (err: any) {
       console.error("Error saving match result:", err);
       alert(`⚠️ ERROR AL GUARDAR EN FIRESTORE:\n\n${err.message || err}\n\nPor favor, verifica tus permisos o conexión.`);
@@ -958,6 +1007,34 @@ export default function AdminPanel({
           </span>
         </div>
 
+        {/* Toggle Lock status settings */}
+        <div className="flex items-center justify-between p-3.5 bg-indigo-50/50 border border-indigo-150 rounded-xl select-none">
+          <div className="space-y-0.5">
+            <span className="text-xs font-bold text-slate-800 block">Bloquear Pronósticos Futuros (Campeón, Goleador, Asistidor)</span>
+            <span className="text-[10px] text-slate-500 block">Si se activa, los participantes no podrán registrar ni modificar sus predicciones futuras.</span>
+          </div>
+          <button
+            type="button"
+            onClick={async () => {
+              if (!onSaveTournamentLockStatus) return;
+              try {
+                const newStatus = !specialPredictionsLocked;
+                await onSaveTournamentLockStatus(newStatus);
+                setSpecialPredictionsLocked(newStatus);
+              } catch (err) {}
+            }}
+            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+              specialPredictionsLocked ? 'bg-indigo-650 bg-indigo-600' : 'bg-slate-250 bg-slate-300'
+            }`}
+          >
+            <span
+              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                specialPredictionsLocked ? 'translate-x-5' : 'translate-x-0'
+              }`}
+            />
+          </button>
+        </div>
+
         {saveResultsSuccess && (
           <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 font-bold animate-fadeIn">
             ✓ ¡Resultados guardados con éxito! Los puntajes de la clasificación se han recalculado automáticamente.
@@ -1160,6 +1237,11 @@ export default function AdminPanel({
               const edit = editingScores[match.id];
               const homeScoreVal = edit !== undefined ? edit.home : (match.homeScore !== undefined ? match.homeScore : 0);
               const awayScoreVal = edit !== undefined ? edit.away : (match.awayScore !== undefined ? match.awayScore : 0);
+              
+              const penaltyEdit = editingPenalties[match.id];
+              const homePensVal = penaltyEdit !== undefined ? penaltyEdit.home : (match.homePenalties !== undefined ? match.homePenalties : 0);
+              const awayPensVal = penaltyEdit !== undefined ? penaltyEdit.away : (match.awayPenalties !== undefined ? match.awayPenalties : 0);
+
               const statusVal = edit !== undefined ? edit.status : match.status;
               const minuteVal = edit !== undefined && edit.minute !== undefined 
                 ? edit.minute 
@@ -1211,12 +1293,15 @@ export default function AdminPanel({
                         </select>
                         
                         {match.homeScore !== undefined || match.awayScore !== undefined ? (
-                          <span className="px-2 py-0.5 bg-slate-900 text-white font-mono font-extrabold text-[10px] rounded-md shadow-xs select-none flex items-center gap-1 mx-1 shrink-0">
-                            {match.homeScore ?? 0} - {match.awayScore ?? 0}
-                            {match.status === 'live' && (
-                              <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping inline-block"></span>
-                            )}
-                          </span>
+                           <span className="px-2 py-0.5 bg-slate-900 text-white font-mono font-extrabold text-[10px] rounded-md shadow-xs select-none flex flex-col items-center gap-0.5 mx-1 shrink-0">
+                             <div>{match.homeScore ?? 0} - {match.awayScore ?? 0}</div>
+                             {match.homePenalties !== undefined && match.awayPenalties !== undefined && match.homePenalties !== null && match.awayPenalties !== null && (
+                               <div className="text-[9px] text-amber-400 font-bold">({match.homePenalties} - {match.awayPenalties} pen.)</div>
+                             )}
+                             {match.status === 'live' && (
+                               <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping inline-block"></span>
+                             )}
+                           </span>
                         ) : (
                           <span className="text-slate-400 font-mono mx-1 shrink-0">vs</span>
                         )}
@@ -1295,6 +1380,36 @@ export default function AdminPanel({
                             value={minuteVal}
                             onChange={(e) => handleMinuteChange(match.id, e.target.value, match)}
                             className="w-14 bg-indigo-50 border border-indigo-200 rounded-lg py-1.5 text-center font-mono font-bold text-indigo-900 focus:outline-none focus:border-indigo-500"
+                          />
+                        </div>
+                      )}
+
+                      {match.phase !== 'group' && homeScoreVal === awayScoreVal && (
+                        <div className="flex flex-col gap-1 items-center ml-2 border-l border-slate-200 pl-3">
+                          <label className="text-[10px] font-bold text-amber-600 uppercase">Pen. Local</label>
+                          <input
+                            type="number"
+                            min="0"
+                            value={homePensVal}
+                            onChange={(e) => handlePenaltyScoreChange(match.id, 'home', e.target.value)}
+                            className="w-14 bg-amber-50 border border-amber-250/60 rounded-lg py-1.5 text-center font-mono font-bold text-slate-800 focus:outline-none focus:border-indigo-500"
+                          />
+                        </div>
+                      )}
+                      
+                      {match.phase !== 'group' && homeScoreVal === awayScoreVal && (
+                        <span className="font-bold text-slate-400 mt-4 select-none">-</span>
+                      )}
+
+                      {match.phase !== 'group' && homeScoreVal === awayScoreVal && (
+                        <div className="flex flex-col gap-1 items-center">
+                          <label className="text-[10px] font-bold text-amber-600 uppercase">Pen. Vis.</label>
+                          <input
+                            type="number"
+                            min="0"
+                            value={awayPensVal}
+                            onChange={(e) => handlePenaltyScoreChange(match.id, 'away', e.target.value)}
+                            className="w-14 bg-amber-50 border border-amber-250/60 rounded-lg py-1.5 text-center font-mono font-bold text-slate-800 focus:outline-none focus:border-indigo-500"
                           />
                         </div>
                       )}

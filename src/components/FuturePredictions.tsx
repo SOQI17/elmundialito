@@ -39,16 +39,6 @@ export default function FuturePredictions({
     }
   }, [currentUser]);
 
-  // Determine lockout status
-  const firstKnockoutMatch = useMemo(() => {
-    return matches.find(m => m.phase === 'dieciseisavos');
-  }, [matches]);
-
-  const isKnockoutStarted = useMemo(() => {
-    if (!firstKnockoutMatch) return false;
-    return Date.now() > new Date(firstKnockoutMatch.dateTime).getTime();
-  }, [firstKnockoutMatch]);
-
   // Determine payment block status
   const isBlockedByPayment = useMemo(() => {
     const isCreator = currentLeague?.creatorId === currentUser.id;
@@ -57,19 +47,10 @@ export default function FuturePredictions({
     return !!currentLeague && !isCreator && !isAdmin && (!myMemberData || !myMemberData.paid);
   }, [currentLeague, currentUser, leagueMembersData]);
 
-  const isLocked = isKnockoutStarted || isBlockedByPayment;
-
-  const formattedLockDate = useMemo(() => {
-    if (!firstKnockoutMatch) return '';
-    return new Date(firstKnockoutMatch.dateTime).toLocaleString('es-ES', {
-      weekday: 'long',
-      day: 'numeric',
-      month: 'long',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false
-    });
-  }, [firstKnockoutMatch]);
+  const isLocked = useMemo(() => {
+    if (isBlockedByPayment) return true;
+    return !!tournamentResults?.specialPredictionsLocked;
+  }, [tournamentResults, isBlockedByPayment]);
 
   // Sorted teams for the dropdown
   const sortedTeams = useMemo(() => {
@@ -131,18 +112,18 @@ export default function FuturePredictions({
           </div>
         </div>
 
-        {/* Countdown/Lock status warning block */}
+        {/* Lock status setting block */}
         <div className="mt-4 pt-4 border-t border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
-          {isKnockoutStarted ? (
-            <div className="flex items-center gap-2 text-rose-400 font-bold">
+          {tournamentResults?.specialPredictionsLocked ? (
+            <div className="flex items-center gap-2 text-rose-400 font-bold bg-rose-950/30 px-3 py-1.5 rounded-lg border border-rose-900/35 select-none">
               <Lock className="w-4 h-4" />
-              <span>Predicciones bloqueadas (Dieciseisavos de Final iniciados).</span>
+              <span>Predicciones bloqueadas por el Organizador (Cerrado).</span>
             </div>
           ) : (
-            <div className="flex items-center gap-2 text-amber-400 font-semibold">
-              <Sparkles className="w-4 h-4 animate-spin-slow" />
+            <div className="flex items-center gap-2 text-emerald-400 font-bold bg-emerald-950/30 px-3 py-1.5 rounded-lg border border-emerald-900/35 select-none">
+              <Sparkles className="w-4 h-4 animate-pulse text-emerald-400" />
               <span>
-                Abierto hasta el inicio de los Dieciseisavos: <strong className="font-sans text-white">{formattedLockDate || 'Próximamente'}</strong>
+                Pronósticos especiales abiertos para edición (Campeón, Goleador, Asistidor).
               </span>
             </div>
           )}

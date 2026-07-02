@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { INITIAL_MATCHES, INITIAL_LEAGUES } from './data';
 import { Match, Forecast, UserProfile, League, UserStats, LeagueMemberInfo, MatchPhase, Team } from './types';
-import { calculateScore } from './utils/scoring';
+import { calculateScore, calculatePenaltyScore } from './utils/scoring';
 
 import { collection, doc, setDoc, getDoc, getDocs, onSnapshot, serverTimestamp, deleteDoc } from 'firebase/firestore';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
@@ -661,7 +661,13 @@ export default function App() {
     } catch (err) { handleFirestoreError(err, OperationType.WRITE, `leagues/${codeUpper}/members`); return false; }
   };
 
-  const handleSaveForecast = async (matchId: string, homeScore: number, awayScore: number) => {
+  const handleSaveForecast = async (
+    matchId: string, 
+    homeScore: number, 
+    awayScore: number,
+    homePenalties?: number,
+    awayPenalties?: number
+  ) => {
     if (!currentUser || currentUser.isAdmin) return;
     const match = matches.find(m => m.id === matchId);
     if (!match) return;
@@ -675,7 +681,21 @@ export default function App() {
     const leagueCode = currentLeague?.code;
     const forecastId = leagueCode ? `${matchId}_${currentUser.id}_${leagueCode}` : `${matchId}_${currentUser.id}`;
     const nowIso = new Date().toISOString();
-    const localForecast: Forecast = { matchId, userId: currentUser.id, homeScore: Number(homeScore), awayScore: Number(awayScore), updatedAt: nowIso, leagueCode };
+    
+    const isKnockout = match.phase !== 'group';
+    const isDraw = homeScore === awayScore;
+    const hasPens = isKnockout && isDraw && homePenalties !== undefined && awayPenalties !== undefined;
+
+    const localForecast: Forecast = { 
+      matchId, 
+      userId: currentUser.id, 
+      homeScore: Number(homeScore), 
+      awayScore: Number(awayScore), 
+      updatedAt: nowIso, 
+      leagueCode,
+      ...(hasPens ? { homePenalties: Number(homePenalties), awayPenalties: Number(awayPenalties) } : {})
+    };
+    
     setForecasts(prev => {
       const idx = prev.findIndex(f => f.matchId === matchId && f.userId === currentUser.id && f.leagueCode === leagueCode);
       if (idx > -1) { const next = [...prev]; next[idx] = localForecast; return next; }
@@ -692,6 +712,7 @@ export default function App() {
         leagueCode,
         homeScore: Number(homeScore), 
         awayScore: Number(awayScore), 
+        ...(hasPens ? { homePenalties: Number(homePenalties), awayPenalties: Number(awayPenalties) } : {}),
         updatedAt: nowIso 
       })); 
     } catch (_) {}
@@ -703,8 +724,9 @@ export default function App() {
         homeScore: Number(homeScore), 
         awayScore: Number(awayScore), 
         updatedAt: serverTimestamp(),
-        leagueCode: leagueCode || null
-      });
+        leagueCode: leagueCode || null,
+        ...(hasPens ? { homePenalties: Number(homePenalties), awayPenalties: Number(awayPenalties) } : { homePenalties: null, awayPenalties: null })
+      }, { merge: true });
     } catch (err) { 
       handleFirestoreError(err, OperationType.WRITE, `forecasts/${forecastId}`); 
       throw err;
@@ -759,7 +781,9 @@ export default function App() {
     liveStartTimestamp?: number | null, 
     incidents?: Match['incidents'],
     homeTeam?: Team,
-    awayTeam?: Team
+    awayTeam?: Team,
+    homePenalties?: number | null,
+    awayPenalties?: number | null
   ) => {
     try {
       const updateData: any = { 
@@ -772,6 +796,8 @@ export default function App() {
       if (incidents !== undefined) updateData.incidents = incidents;
       if (homeTeam !== undefined) updateData.homeTeam = homeTeam;
       if (awayTeam !== undefined) updateData.awayTeam = awayTeam;
+      if (homePenalties !== undefined) updateData.homePenalties = homePenalties;
+      if (awayPenalties !== undefined) updateData.awayPenalties = awayPenalties;
       await setDoc(doc(db, 'matches', matchId), updateData, { merge: true });
     } catch (err) { 
       handleFirestoreError(err, OperationType.WRITE, `matches/${matchId}`); 
@@ -804,6 +830,19 @@ export default function App() {
       }, { merge: true });
     } catch (err: any) {
       console.error("Error saving tournament results:", err);
+      handleFirestoreError(err, OperationType.WRITE, 'matches/tournament_results');
+      throw err;
+    }
+  };
+
+  const handleSaveTournamentLockStatus = async (locked: boolean) => {
+    if (!authUser || !isRealAdmin) return;
+    try {
+      await setDoc(doc(db, 'matches', 'tournament_results'), {
+        specialPredictionsLocked: locked
+      }, { merge: true });
+    } catch (err: any) {
+      console.error("Error saving tournament lock status:", err);
       handleFirestoreError(err, OperationType.WRITE, 'matches/tournament_results');
       throw err;
     }
@@ -1047,6 +1086,17 @@ export default function App() {
             else if (r.category === 'trend') trend++;
             else if (r.category === 'simple') simple++;
             else none++;
+
+            // Penalties shootout points
+            if (match.phase !== 'group' && match.homeScore === match.awayScore) {
+              const penResult = calculatePenaltyScore(
+                match.homePenalties,
+                match.awayPenalties,
+                f.homePenalties,
+                f.awayPenalties
+              );
+              total += penResult.score;
+            }
           } else { none++; }
         } else {
           if (f) pending++;
@@ -1403,7 +1453,7 @@ export default function App() {
           )}
           {activeTab === 'leaderboard' && (
             currentLeague ? (
-              <Leaderboard stats={currentStats} currentUser={currentUserWithAdminFlag!} matches={matches} forecasts={forecasts} users={users} currentLeague={enrichedCurrentLeague} activePhase={activePhase} onChangePhase={setActivePhase} />
+              <Leaderboard stats={currentStats} currentUser={currentUserWithAdminFlag!} matches={matches} forecasts={forecasts} users={users} currentLeague={enrichedCurrentLeague} activePhase={activePhase} onChangePhase={setActivePhase} tournamentResults={tournamentResults} />
             ) : (
               <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-8 text-center max-w-xl mx-auto space-y-4 my-8 animate-fadeIn">
                 <div className="w-16 h-16 bg-amber-50 border border-amber-200 text-amber-500 rounded-2xl flex items-center justify-center mx-auto text-3xl select-none animate-bounce">
@@ -1465,6 +1515,7 @@ export default function App() {
               onSaveUserForecast={handleSaveUserForecast}
               onSyncMatchesFromAPI={handleSyncMatchesFromAPI}
               onSaveTournamentResults={handleSaveTournamentResults}
+              onSaveTournamentLockStatus={handleSaveTournamentLockStatus}
               tournamentResults={tournamentResults}
             />
           )}

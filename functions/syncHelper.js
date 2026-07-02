@@ -215,6 +215,23 @@ export async function performSync(db, apiToken) {
           needsUpdate = true;
         }
       }
+      // Sync penalty shootout scores
+      const apiHomePens = apiM.score?.penalties?.home;
+      const apiAwayPens = apiM.score?.penalties?.away;
+      if (apiHomePens !== null && apiHomePens !== undefined) {
+        const apiHomePensNum = Number(apiHomePens);
+        if (localMatch.homePenalties !== apiHomePensNum) {
+          updateData.homePenalties = apiHomePensNum;
+          needsUpdate = true;
+        }
+      }
+      if (apiAwayPens !== null && apiAwayPens !== undefined) {
+        const apiAwayPensNum = Number(apiAwayPens);
+        if (localMatch.awayPenalties !== apiAwayPensNum) {
+          updateData.awayPenalties = apiAwayPensNum;
+          needsUpdate = true;
+        }
+      }
     }
 
     // Check apiId association

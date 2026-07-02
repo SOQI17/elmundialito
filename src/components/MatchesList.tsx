@@ -3,13 +3,20 @@ import { Match, MatchPhase, Forecast, UserProfile, League, LeagueMemberInfo, Tea
 import { Lock, Unlock, Calendar, Eye, Activity, CheckSquare, Sparkles, Tv, AlertCircle } from 'lucide-react';
 import LiveMatchSimulator from './LiveMatchSimulator';
 import TeamFlag from './TeamFlag';
+import { calculatePenaltyScore } from '../utils/scoring';
 
 interface MatchesListProps {
   matches: Match[];
   forecasts: Forecast[];
   currentUser: UserProfile;
   allUsers: UserProfile[];
-  onSaveForecast: (matchId: string, homeScore: number, awayScore: number) => void;
+  onSaveForecast: (
+    matchId: string, 
+    homeScore: number, 
+    awayScore: number,
+    homePenalties?: number,
+    awayPenalties?: number
+  ) => void;
   onUpdateMatchResult: (
     matchId: string,
     homeScore: number | undefined,
@@ -69,7 +76,7 @@ export default function MatchesList({
   const [activeGroupFilter, setActiveGroupFilter] = useState<string>('all');
   const [activeDateFilter, setActiveDateFilter] = useState<string>('all');
   const [expandedMatchId, setExpandedMatchId] = useState<string | null>(null);
-  const [drafts, setDrafts] = useState<Record<string, { homeScore: number; awayScore: number }>>({});
+  const [drafts, setDrafts] = useState<Record<string, { homeScore: number; awayScore: number; homePenalties?: number; awayPenalties?: number }>>({});
   const [savingMatchIds, setSavingMatchIds] = useState<Record<string, boolean>>({});
   const [selectedLiveMatch, setSelectedLiveMatch] = useState<Match | null>(null);
   const [now, setNow] = useState<Date>(new Date());
@@ -202,15 +209,60 @@ export default function MatchesList({
     let awayS = draft ? draft.awayScore : (forecast ? forecast.awayScore : 0);
     if (team === 'home') homeS = Math.max(0, homeS + step);
     else awayS = Math.max(0, awayS + step);
-    setDrafts(prev => ({ ...prev, [matchId]: { homeScore: homeS, awayScore: awayS } }));
+
+    const homeP = draft?.homePenalties !== undefined ? draft.homePenalties : (forecast?.homePenalties || 0);
+    const awayP = draft?.awayPenalties !== undefined ? draft.awayPenalties : (forecast?.awayPenalties || 0);
+
+    setDrafts(prev => ({ 
+      ...prev, 
+      [matchId]: { 
+        homeScore: homeS, 
+        awayScore: awayS,
+        homePenalties: homeP,
+        awayPenalties: awayP
+      } 
+    }));
+  };
+
+  const handlePenaltyChange = (matchId: string, team: 'home' | 'away', currentVal: number, step: number) => {
+    const forecast = getMyForecast(matchId);
+    const draft = drafts[matchId];
+    const homeS = draft ? draft.homeScore : (forecast ? forecast.homeScore : 0);
+    const awayS = draft ? draft.awayScore : (forecast ? forecast.awayScore : 0);
+    let homeP = draft?.homePenalties !== undefined ? draft.homePenalties : (forecast?.homePenalties || 0);
+    let awayP = draft?.awayPenalties !== undefined ? draft.awayPenalties : (forecast?.awayPenalties || 0);
+
+    if (team === 'home') homeP = Math.max(0, homeP + step);
+    else awayP = Math.max(0, awayP + step);
+
+    setDrafts(prev => ({ 
+      ...prev, 
+      [matchId]: { 
+        homeScore: homeS, 
+        awayScore: awayS,
+        homePenalties: homeP,
+        awayPenalties: awayP
+      } 
+    }));
   };
 
   const handleCommitForecast = async (matchId: string) => {
     const draft = drafts[matchId];
     if (!draft) return;
+    
+    // Shootout draw check
+    const matchVal = matches.find(m => m.id === matchId);
+    const isKnockout = matchVal?.phase !== 'group';
+    if (isKnockout && draft.homeScore === draft.awayScore) {
+      if (draft.homePenalties === draft.awayPenalties) {
+        alert("Error: Las tandas de penales deben tener un ganador (el marcador no puede quedar empatado).");
+        return;
+      }
+    }
+
     setSavingMatchIds(prev => ({ ...prev, [matchId]: true }));
     try {
-      await onSaveForecast(matchId, draft.homeScore, draft.awayScore);
+      await onSaveForecast(matchId, draft.homeScore, draft.awayScore, draft.homePenalties, draft.awayPenalties);
       setDrafts(prev => { const copy = { ...prev }; delete copy[matchId]; return copy; });
     } catch (err: any) {
       console.error('Error al guardar pronóstico:', err);
@@ -256,7 +308,7 @@ export default function MatchesList({
       let copiedCount = 0;
       for (let i = 0; i < eligibleForecasts.length; i++) {
         const f = eligibleForecasts[i];
-        await onSaveForecast(f.matchId, f.homeScore, f.awayScore);
+        await onSaveForecast(f.matchId, f.homeScore, f.awayScore, f.homePenalties, f.awayPenalties);
         copiedCount++;
         setImportProgress(Math.round(((i + 1) / eligibleForecasts.length) * 100));
       }
@@ -572,9 +624,17 @@ export default function MatchesList({
                       const isPlayed = match.status === 'finished';
                       const draft = drafts[match.id];
                       const hasDraft = draft !== undefined;
-                      const isPendingValue = hasDraft && (!userForecast || userForecast.homeScore !== draft.homeScore || userForecast.awayScore !== draft.awayScore);
+                      const isPendingValue = hasDraft && (
+                        !userForecast || 
+                        userForecast.homeScore !== draft.homeScore || 
+                        userForecast.awayScore !== draft.awayScore ||
+                        userForecast.homePenalties !== draft.homePenalties ||
+                        userForecast.awayPenalties !== draft.awayPenalties
+                      );
                       const displayHomeScore = hasDraft ? draft.homeScore : (userForecast ? userForecast.homeScore : undefined);
                       const displayAwayScore = hasDraft ? draft.awayScore : (userForecast ? userForecast.awayScore : undefined);
+                      const displayHomePens = hasDraft ? draft.homePenalties : (userForecast ? userForecast.homePenalties : undefined);
+                      const displayAwayPens = hasDraft ? draft.awayPenalties : (userForecast ? userForecast.awayPenalties : undefined);
                       const otherForecasts = (() => {
                         const raw = forecasts.filter(f => {
                           if (f.matchId !== match.id || f.userId === currentUser.id) return false;
@@ -650,10 +710,17 @@ export default function MatchesList({
                               {/* Score or VS */}
                               <div className="flex items-center gap-2 select-none shrink-0">
                                 {isPlayed || match.status === 'live' ? (
-                                  <div className="flex items-center gap-2 bg-slate-900 text-white font-mono font-bold text-lg px-3 py-1.5 rounded-lg">
-                                    <span>{match.homeScore}</span>
-                                    <span className="text-slate-500">-</span>
-                                    <span>{match.awayScore}</span>
+                                  <div className="flex flex-col items-center bg-slate-900 text-white font-mono font-bold text-sm px-3 py-1.5 rounded-lg select-none">
+                                    <div className="flex items-center gap-2 text-base">
+                                      <span>{match.homeScore}</span>
+                                      <span className="text-slate-500">-</span>
+                                      <span>{match.awayScore}</span>
+                                    </div>
+                                    {match.homePenalties !== undefined && match.awayPenalties !== undefined && match.homePenalties !== null && match.awayPenalties !== null && (
+                                      <span className="text-[10px] text-amber-400 font-bold mt-0.5">
+                                        ({match.homePenalties} - {match.awayPenalties} pen.)
+                                      </span>
+                                    )}
                                   </div>
                                 ) : (
                                   <div className="font-sans text-xs font-bold text-slate-400 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200 uppercase tracking-wider">
@@ -719,12 +786,69 @@ export default function MatchesList({
                                     </div>
                                   </div>
 
+                                  {match.phase !== 'group' && displayHomeScore !== undefined && displayAwayScore !== undefined && displayHomeScore === displayAwayScore && (
+                                    <div className="flex flex-col items-center space-y-1.5 pt-2 border-t border-slate-100/50 w-full animate-fadeIn" id={`penalties-input-${match.id}`}>
+                                      <span className="text-[9px] font-black text-rose-700 uppercase tracking-wider flex items-center gap-1">
+                                        🎯 Marcador de Penales
+                                      </span>
+                                      <div className="flex items-center gap-4">
+                                        {/* Home penalties input */}
+                                        <div className="flex items-center gap-1.5">
+                                          {!locked && (
+                                            <button 
+                                              type="button"
+                                              onClick={() => handlePenaltyChange(match.id, 'home', userForecast?.homePenalties || 0, -1)} 
+                                              className="w-6.5 h-6.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-md text-xs font-bold flex items-center justify-center shadow-xs cursor-pointer"
+                                            >-</button>
+                                          )}
+                                          <div className="w-8 h-8 bg-white border border-slate-200 font-mono font-bold text-slate-800 rounded-lg flex items-center justify-center text-sm shadow-inner">
+                                            {displayHomePens !== undefined ? displayHomePens : '-'}
+                                          </div>
+                                          {!locked && (
+                                            <button 
+                                              type="button"
+                                              onClick={() => handlePenaltyChange(match.id, 'home', userForecast?.homePenalties || 0, 1)} 
+                                              className="w-6.5 h-6.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-md text-xs font-bold flex items-center justify-center shadow-xs cursor-pointer"
+                                            >+</button>
+                                          )}
+                                        </div>
+                                        <span className="text-xs font-bold text-slate-400 font-mono">pens</span>
+                                        {/* Away penalties input */}
+                                        <div className="flex items-center gap-1.5">
+                                          {!locked && (
+                                            <button 
+                                              type="button"
+                                              onClick={() => handlePenaltyChange(match.id, 'away', userForecast?.awayPenalties || 0, -1)} 
+                                              className="w-6.5 h-6.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-md text-xs font-bold flex items-center justify-center shadow-xs cursor-pointer"
+                                            >-</button>
+                                          )}
+                                          <div className="w-8 h-8 bg-white border border-slate-200 font-mono font-bold text-slate-800 rounded-lg flex items-center justify-center text-sm shadow-inner">
+                                            {displayAwayPens !== undefined ? displayAwayPens : '-'}
+                                          </div>
+                                          {!locked && (
+                                            <button 
+                                              type="button"
+                                              onClick={() => handlePenaltyChange(match.id, 'away', userForecast?.awayPenalties || 0, 1)} 
+                                              className="w-6.5 h-6.5 bg-white hover:bg-slate-155 text-slate-700 border border-slate-200 rounded-md text-xs font-bold flex items-center justify-center shadow-xs cursor-pointer"
+                                            >+</button>
+                                          )}
+                                        </div>
+                                      </div>
+                                      
+                                      {displayHomePens !== undefined && displayAwayPens !== undefined && displayHomePens === displayAwayPens && (
+                                        <span className="text-[9px] text-rose-600 font-extrabold select-none animate-pulse">
+                                          ⚠️ Los penales no pueden quedar empatados.
+                                        </span>
+                                      )}
+                                    </div>
+                                  )}
+
                                   {!userForecast && !hasDraft && (
-                                    <span className="text-[10px] text-amber-600 font-semibold">⚠️ Requiere ingresar pronóstico</span>
+                                    <span className="text-[10px] text-amber-600 font-semibold mt-1">⚠️ Requiere ingresar pronóstico</span>
                                   )}
 
                                   {isPendingValue && !locked && (
-                                    <div className="flex flex-col items-center gap-1.5 w-full">
+                                    <div className="flex flex-col items-center gap-1.5 w-full mt-2">
                                       <span className="text-[10px] text-indigo-600 font-black animate-pulse uppercase tracking-wider">⚡ Cambios sin confirmar</span>
                                       <button
                                         onClick={() => handleCommitForecast(match.id)}
@@ -738,10 +862,41 @@ export default function MatchesList({
                                   )}
 
                                   {isPlayed && userForecast && (
-                                    <div className="pt-2 border-t border-slate-100/50 w-full flex justify-center">
+                                    <div className="pt-2 border-t border-slate-100/50 w-full flex flex-col items-center gap-1">
                                       {(() => {
                                         const rating = getScoreBadge(match, userForecast);
-                                        return <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full ${rating.style}`}>{rating.label} (+{rating.points} Pts)</span>;
+                                        let totalPts = rating.points;
+                                        if (match.phase !== 'group' && match.homeScore === match.awayScore) {
+                                          const penResult = calculatePenaltyScore(
+                                            match.homePenalties,
+                                            match.awayPenalties,
+                                            userForecast.homePenalties,
+                                            userForecast.awayPenalties
+                                          );
+                                          totalPts += penResult.score;
+                                        }
+                                        return (
+                                          <>
+                                            <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full ${rating.style}`}>{rating.label} (+{totalPts} Pts)</span>
+                                            {match.phase !== 'group' && match.homeScore === match.awayScore && (
+                                              <div className="text-[10px] text-slate-500 font-medium mt-0.5">
+                                                Penales: {userForecast.homePenalties ?? 0} - {userForecast.awayPenalties ?? 0}
+                                                {(() => {
+                                                  const penResult = calculatePenaltyScore(
+                                                    match.homePenalties,
+                                                    match.awayPenalties,
+                                                    userForecast.homePenalties,
+                                                    userForecast.awayPenalties
+                                                  );
+                                                  if (penResult.score > 0) {
+                                                    return <span className="text-emerald-600 font-bold ml-1"> ({penResult.reason} +{penResult.score})</span>;
+                                                  }
+                                                  return <span className="text-slate-400 font-semibold ml-1"> (No sumó en penales)</span>;
+                                                })()}
+                                              </div>
+                                            )}
+                                          </>
+                                        );
                                       })()}
                                     </div>
                                   )}
@@ -821,9 +976,30 @@ export default function MatchesList({
                                           </div>
                                         </div>
                                         <div className="text-right flex flex-col items-end">
-                                          <div className="font-mono text-xs bg-slate-900 text-white px-2 py-1 rounded font-bold">{f.homeScore} - {f.awayScore}</div>
+                                          <div className="font-mono text-xs bg-slate-900 text-white px-2 py-1 rounded font-bold">
+                                            {f.homeScore} - {f.awayScore}
+                                          </div>
+                                          {match.phase !== 'group' && f.homeScore === f.awayScore && f.homePenalties !== undefined && f.awayPenalties !== undefined && f.homePenalties !== null && f.awayPenalties !== null && (
+                                            <span className="text-[10px] text-amber-500 font-bold mt-0.5">
+                                              ({f.homePenalties} - {f.awayPenalties} pen.)
+                                            </span>
+                                          )}
                                           {showFriendlyResult && pointsResult && (
-                                            <span className={`inline-block text-[9px] font-bold mt-1 px-1.5 rounded ${pointsResult.badgeColor}`}>+{pointsResult.points} pts</span>
+                                            <span className={`inline-block text-[9px] font-bold mt-1 px-1.5 rounded ${pointsResult.badgeColor}`}>
+                                              {(() => {
+                                                let pts = pointsResult.points;
+                                                if (match.phase !== 'group' && match.homeScore === match.awayScore) {
+                                                  const penResult = calculatePenaltyScore(
+                                                    match.homePenalties,
+                                                    match.awayPenalties,
+                                                    f.homePenalties,
+                                                    f.awayPenalties
+                                                  );
+                                                  pts += penResult.score;
+                                                }
+                                                return `+${pts} pts`;
+                                              })()}
+                                            </span>
                                           )}
                                         </div>
                                       </div>

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { UserStats, UserProfile, Match, Forecast, League, MatchPhase } from '../types';
 import { Trophy, Award, Search, Percent, Medal, BarChart2, Calendar, ChevronDown, ChevronUp, BookOpen, Coins } from 'lucide-react';
-import { calculateScore } from '../utils/scoring';
+import { calculateScore, calculatePenaltyScore } from '../utils/scoring';
 import { TEAMS } from '../data';
 import TeamFlag from './TeamFlag';
 
@@ -277,6 +277,17 @@ export default function Leaderboard({
             else if (result.category === 'trend') trendMatchesCount++;
             else if (result.category === 'simple') simpleMatchesCount++;
             else if (result.category === 'none') noMatchesCount++;
+
+            // Penalty shootout scoring
+            if (match.phase !== 'group' && match.homeScore === match.awayScore) {
+              const penResult = calculatePenaltyScore(
+                match.homePenalties,
+                match.awayPenalties,
+                forecast.homePenalties,
+                forecast.awayPenalties
+              );
+              totalPoints += penResult.score;
+            }
           } else {
             noMatchesCount++;
           }
@@ -1090,9 +1101,16 @@ export default function Leaderboard({
                                       
                                       <div className="flex items-center gap-2.5 self-stretch sm:self-auto justify-between shrink-0">
                                         {forecast ? (
-                                          <span className="px-2.5 py-1 bg-indigo-50 text-indigo-800 text-[10px] font-black rounded-lg border border-indigo-100">
-                                            Apuesta: {forecast.homeScore} - {forecast.awayScore}
-                                          </span>
+                                          <div className="flex flex-col items-end shrink-0">
+                                            <span className="px-2.5 py-1 bg-indigo-50 text-indigo-800 text-[10px] font-black rounded-lg border border-indigo-100">
+                                              Apuesta: {forecast.homeScore} - {forecast.awayScore}
+                                            </span>
+                                            {m.phase !== 'group' && forecast.homeScore === forecast.awayScore && forecast.homePenalties !== undefined && forecast.awayPenalties !== undefined && (
+                                              <span className="text-[9px] text-amber-600 font-bold mt-0.5">
+                                                (Penales: {forecast.homePenalties} - {forecast.awayPenalties})
+                                              </span>
+                                            )}
+                                          </div>
                                         ) : (
                                           <div className="flex flex-col items-end">
                                             <span className="px-2 py-1 bg-amber-50 border border-amber-250 text-amber-700 text-[9px] font-bold rounded-lg leading-none">
