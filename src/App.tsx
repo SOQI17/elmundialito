@@ -205,7 +205,14 @@ export default function App() {
       // Sync currentUser name/avatar live from Firestore
       const myProfile = uData.find(u => u.id === authUser.uid);
       if (myProfile) {
-        setCurrentUser(prev => prev ? { ...prev, name: myProfile.name, avatar: myProfile.avatar } : myProfile);
+        setCurrentUser(prev => prev ? { 
+          ...prev, 
+          name: myProfile.name, 
+          avatar: myProfile.avatar,
+          predictedChampion: myProfile.predictedChampion,
+          predictedScorer: myProfile.predictedScorer,
+          predictedAssister: myProfile.predictedAssister
+        } : myProfile);
       }
     }, (err) => {
       console.warn('Users sync offline:', err);
@@ -1415,6 +1422,7 @@ export default function App() {
                 onSavePredictions={handleSaveTournamentPredictions}
                 currentLeague={enrichedCurrentLeague}
                 leagueMembersData={currentLeagueMembersData}
+                allUsers={users}
               />
             ) : (
               <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-8 text-center max-w-xl mx-auto space-y-4 my-8 animate-fadeIn">

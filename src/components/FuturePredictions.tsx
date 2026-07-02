@@ -12,6 +12,7 @@ interface FuturePredictionsProps {
   onSavePredictions: (champion: string, scorer: string, assister: string) => Promise<void>;
   currentLeague?: League | null;
   leagueMembersData?: LeagueMemberInfo[];
+  allUsers: UserProfile[];
 }
 
 export default function FuturePredictions({
@@ -20,7 +21,8 @@ export default function FuturePredictions({
   tournamentResults,
   onSavePredictions,
   currentLeague,
-  leagueMembersData
+  leagueMembersData,
+  allUsers
 }: FuturePredictionsProps) {
   const [selectedChampion, setSelectedChampion] = useState<string>(currentUser.predictedChampion || '');
   const [selectedScorer, setSelectedScorer] = useState<string>(currentUser.predictedScorer || '');
@@ -60,6 +62,21 @@ export default function FuturePredictions({
     if (isBlockedByPayment) return true;
     return !!tournamentResults?.specialPredictionsLocked;
   }, [tournamentResults, isBlockedByPayment]);
+
+  const leagueMembersProfiles = useMemo(() => {
+    if (!currentLeague || !leagueMembersData) return [];
+    return leagueMembersData
+      .map(m => {
+        const u = allUsers.find(user => user.id === m.userId);
+        if (!u) return null;
+        return {
+          ...u,
+          paid: m.paid
+        };
+      })
+      .filter((u): u is (UserProfile & { paid: boolean }) => u !== null)
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [currentLeague, leagueMembersData, allUsers]);
 
   // Sorted teams for the dropdown
   const sortedTeams = useMemo(() => {
@@ -590,6 +607,139 @@ export default function FuturePredictions({
                 </span>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* League Members Predictions List */}
+      {currentLeague && leagueMembersProfiles.length > 0 && (
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 shadow-sm" id="league-special-predictions-list">
+          <div className="border-b border-slate-100 pb-2.5 flex items-center justify-between">
+            <div>
+              <h4 className="text-xs font-bold text-slate-800 font-sans uppercase tracking-wider flex items-center gap-1.5 select-none">
+                👥 Pronósticos de la Liga: <span className="text-indigo-650 font-bold normal-case">{currentLeague.name}</span>
+              </h4>
+              <p className="text-[10px] text-slate-500 mt-0.5 select-none">
+                {isLocked 
+                  ? "Las predicciones ya están bloqueadas. Se revelan las elecciones de todos los integrantes." 
+                  : "Las predicciones están abiertas. Solo se muestra si cada integrante ha guardado o no su pronóstico."}
+              </p>
+            </div>
+            <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider select-none ${
+              isLocked ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-800'
+            }`}>
+              {isLocked ? '🔒 Bloqueado' : '🔓 Abierto'}
+            </span>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="border-b border-slate-150 text-[10px] text-slate-400 font-black uppercase tracking-wider">
+                  <th className="py-2.5 px-3">Usuario</th>
+                  <th className="py-2.5 px-3">🏆 Campeón</th>
+                  <th className="py-2.5 px-3">⚽ Goleador</th>
+                  <th className="py-2.5 px-3">👟 Asistidor</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {leagueMembersProfiles.map((member) => {
+                  const hasChamp = !!member.predictedChampion;
+                  const hasScorer = !!member.predictedScorer;
+                  const hasAssister = !!member.predictedAssister;
+
+                  return (
+                    <tr key={member.id} className="hover:bg-slate-50/50 transition-colors">
+                      <td className="py-3 px-3 font-semibold text-slate-800 flex items-center gap-2">
+                        <span className="text-base select-none">{member.avatar}</span>
+                        <span className="truncate max-w-[120px]">{member.name}</span>
+                        {member.id === currentUser.id && (
+                          <span className="px-1.5 py-0.2 bg-indigo-50 border border-indigo-150 text-indigo-700 text-[8px] font-black rounded uppercase scale-90">Tú</span>
+                        )}
+                      </td>
+                      
+                      {/* Champion prediction column */}
+                      <td className="py-3 px-3">
+                        {isLocked ? (
+                          member.predictedChampion ? (
+                            (() => {
+                              const team = TEAMS[member.predictedChampion];
+                              return team ? (
+                                <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                                  <TeamFlag team={team} size="sm" />
+                                  <span>{team.name}</span>
+                                </span>
+                              ) : <span className="text-slate-400 italic">No válido</span>;
+                            })()
+                          ) : (
+                            <span className="text-slate-400 italic">Sin pronóstico</span>
+                          )
+                        ) : (
+                          hasChamp ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-md text-[9px] font-bold border border-indigo-100">
+                              <Lock className="w-2.5 h-2.5" />
+                              Guardado
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-100 text-slate-400 rounded-md text-[9px] font-bold">
+                              Pendiente
+                            </span>
+                          )
+                        )}
+                      </td>
+
+                      {/* Scorer prediction column */}
+                      <td className="py-3 px-3">
+                        {isLocked ? (
+                          member.predictedScorer ? (
+                            <span className="font-bold text-slate-800">
+                              {member.predictedScorer}
+                            </span>
+                          ) : (
+                            <span className="text-slate-400 italic">Sin pronóstico</span>
+                          )
+                        ) : (
+                          hasScorer ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-md text-[9px] font-bold border border-indigo-100">
+                              <Lock className="w-2.5 h-2.5" />
+                              Guardado
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-100 text-slate-400 rounded-md text-[9px] font-bold">
+                              Pendiente
+                            </span>
+                          )
+                        )}
+                      </td>
+
+                      {/* Assister prediction column */}
+                      <td className="py-3 px-3">
+                        {isLocked ? (
+                          member.predictedAssister ? (
+                            <span className="font-bold text-slate-800">
+                              {member.predictedAssister}
+                            </span>
+                          ) : (
+                            <span className="text-slate-400 italic">Sin pronóstico</span>
+                          )
+                        ) : (
+                          hasAssister ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-md text-[9px] font-bold border border-indigo-100">
+                              <Lock className="w-2.5 h-2.5" />
+                              Guardado
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-100 text-slate-400 rounded-md text-[9px] font-bold">
+                              Pendiente
+                            </span>
+                          )
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
